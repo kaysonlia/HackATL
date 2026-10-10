@@ -1,0 +1,40 @@
+name: SoundSight
+options:
+  bundleIdPrefix: com.hackatl
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+packages:
+  EchoCore:
+    path: EchoCore
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+targets:
+  SoundSight:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: EchoApp
+        excludes:
+          - "Config/**"
+          - "Info.plist"
+    dependencies:
+      - package: EchoCore
+    configFiles:
+      Debug: EchoApp/Config/App.xcconfig
+      Release: EchoApp/Config/App.xcconfig
+    info:
+      path: EchoApp/Info.plist
+      properties:
+        CFBundleDisplayName: SoundSight
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSMicrophoneUsageDescription: SoundSight listens to the sounds around you to identify them and show where they come from. Audio never leaves your iPhone.
+        NSMotionUsageDescription: SoundSight uses motion sensors to keep sound directions fixed as you turn.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hackatl.soundsight
+        TARGETED_DEVICE_FAMILY: "1"
+    scheme: {}

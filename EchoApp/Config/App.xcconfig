@@ -1,0 +1,4 @@
+// Shared app settings. Personal signing lives in the git-ignored Signing.xcconfig
+// (copy Signing.xcconfig.example and set your team ID).
+CODE_SIGN_STYLE = Automatic
+#include? "Signing.xcconfig"
