@@ -1,0 +1,224 @@
+{
+ "SoundAnalysis": {
+  "top1_group_acc_36cls": 0.779,
+  "false_alarm_rate@0.1": 0.896,
+  "false_alarm_rate@0.2": 0.699,
+  "tau_at_5pct_FA": 0.924,
+  "safety": {
+   "siren": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": 0.97,
+    "AUC": 0.999
+   },
+   "car_horn": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": 0.82,
+    "AUC": 0.988
+   },
+   "fireworks": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": 0.93,
+    "AUC": 0.997
+   },
+   "glass_breaking": {
+    "recall@0.20": 0.95,
+    "recall@5%FA": 0.75,
+    "AUC": 0.987
+   },
+   "clock_alarm": {
+    "recall@0.20": 0.97,
+    "recall@5%FA": null,
+    "AUC": 0.993
+   },
+   "door_wood_knock": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": null,
+    "AUC": 0.998
+   },
+   "crying_baby": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": null,
+    "AUC": 0.999
+   },
+   "dog": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": null,
+    "AUC": 1.0
+   }
+  },
+  "top_false_alarms@0.20": [
+   [
+    "thunderstorm->Gunshot/Explosion",
+    39
+   ],
+   [
+    "train->Vehicle Horn",
+    38
+   ],
+   [
+    "door_wood_knock->Slam/Bang/Crash",
+    33
+   ],
+   [
+    "cow->Siren",
+    29
+   ],
+   [
+    "clock_alarm->Smoke/Fire Alarm",
+    27
+   ],
+   [
+    "clock_tick->Vehicle Horn",
+    26
+   ]
+  ]
+ },
+ "YAMNet Core ML fp16": {
+  "top1_group_acc_36cls": 0.619,
+  "false_alarm_rate@0.1": 0.337,
+  "false_alarm_rate@0.2": 0.232,
+  "tau_at_5pct_FA": 0.77,
+  "safety": {
+   "siren": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": 1.0,
+    "AUC": 0.999
+   },
+   "car_horn": {
+    "recall@0.20": 0.9,
+    "recall@5%FA": 0.5,
+    "AUC": 0.993
+   },
+   "fireworks": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": 0.95,
+    "AUC": 0.995
+   },
+   "glass_breaking": {
+    "recall@0.20": 0.97,
+    "recall@5%FA": 0.88,
+    "AUC": 0.995
+   },
+   "clock_alarm": {
+    "recall@0.20": 0.97,
+    "recall@5%FA": null,
+    "AUC": 0.978
+   },
+   "door_wood_knock": {
+    "recall@0.20": 0.85,
+    "recall@5%FA": null,
+    "AUC": 0.963
+   },
+   "crying_baby": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": null,
+    "AUC": 0.998
+   },
+   "dog": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": null,
+    "AUC": 1.0
+   }
+  },
+  "top_false_alarms@0.20": [
+   [
+    "thunderstorm->Gunshot/Explosion",
+    35
+   ],
+   [
+    "door_wood_knock->Slam/Bang/Crash",
+    27
+   ],
+   [
+    "can_opening->Gunshot/Explosion",
+    22
+   ],
+   [
+    "chainsaw->Motorcycle",
+    19
+   ],
+   [
+    "footsteps->Gunshot/Explosion",
+    16
+   ],
+   [
+    "crackling_fire->Gunshot/Explosion",
+    14
+   ]
+  ]
+ },
+ "YAMNet TFLite (int8)": {
+  "top1_group_acc_36cls": 0.67,
+  "false_alarm_rate@0.1": 0.274,
+  "false_alarm_rate@0.2": 0.16,
+  "tau_at_5pct_FA": 0.574,
+  "safety": {
+   "siren": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": 1.0,
+    "AUC": 0.999
+   },
+   "car_horn": {
+    "recall@0.20": 0.88,
+    "recall@5%FA": 0.65,
+    "AUC": 0.997
+   },
+   "fireworks": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": 1.0,
+    "AUC": 0.997
+   },
+   "glass_breaking": {
+    "recall@0.20": 0.95,
+    "recall@5%FA": 0.8,
+    "AUC": 0.997
+   },
+   "clock_alarm": {
+    "recall@0.20": 0.97,
+    "recall@5%FA": null,
+    "AUC": 0.983
+   },
+   "door_wood_knock": {
+    "recall@0.20": 0.9,
+    "recall@5%FA": null,
+    "AUC": 0.993
+   },
+   "crying_baby": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": null,
+    "AUC": 0.999
+   },
+   "dog": {
+    "recall@0.20": 1.0,
+    "recall@5%FA": null,
+    "AUC": 1.0
+   }
+  },
+  "top_false_alarms@0.20": [
+   [
+    "thunderstorm->Gunshot/Explosion",
+    33
+   ],
+   [
+    "can_opening->Gunshot/Explosion",
+    28
+   ],
+   [
+    "door_wood_knock->Slam/Bang/Crash",
+    13
+   ],
+   [
+    "footsteps->Gunshot/Explosion",
+    13
+   ],
+   [
+    "chainsaw->Motorcycle",
+    12
+   ],
+   [
+    "crackling_fire->Gunshot/Explosion",
+    11
+   ]
+  ]
+ }
+}

@@ -1,0 +1,10 @@
+{
+ "windows": 18000,
+ "tflite_ms": 0.8306249990516031,
+ "mel_frontend_tf_ms": 0.39134420887825805,
+ "coreml_ALL_ms": 0.7010701424312882,
+ "coreml_fp16_CPU_ONLY_ms": 0.6401227100286633,
+ "coreml_fp16_CPU_AND_GPU_ms": 1.307078335667029,
+ "coreml_fp16_CPU_AND_NE_ms": 0.35078937537036836,
+ "coreml_fp16_ALL_ms": 0.37615458481013775
+}
