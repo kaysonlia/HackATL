@@ -60,7 +60,7 @@ AVCaptureSession (audio only, built-in mic, multichannelAudioMode = .firstOrderA
 - `SoundAnalysisClassifier`: `SNAudioStreamAnalyzer` (mono Float32 at the capture rate) with `SNClassifySoundRequest(classifierIdentifier: .version1)`, `windowDuration = 1.0 s`, `overlapFactor = 0.5`. Each `SNClassificationResult.timeRange` gives the window start sample.
 - `LabelMapper` (EchoCore): Apple label → group via `apple_to_group.json`; group score = top-3 noisy-OR `1 − ∏(1 − pᵢ)`.
 - `GroupThresholds` (EchoCore): per-group thresholds from `thresholds.json` (spike output, tunable). A group is **active** when score ≥ threshold.
-- `UrgencyMap` (EchoCore): `urgency_map.json` (CRITICAL / HIGH / MEDIUM / LOW). "Car Alarm", "TV/Radio" and "Fart" have no Apple label and never fire.
+- `UrgencyMap` (EchoCore): `urgency_map.json` (CRITICAL / HIGH / MEDIUM / LOW). "Car Alarm", "TV/Radio" and "Fart" have no Apple label and never fire until the step 7 custom classifier adds Car Alarm.
 
 ### 3.3 Direction of arrival (`EchoCore/DSP`)
 For each 1 s window (from the same ring buffer and sample grid as classification):
@@ -93,6 +93,19 @@ For each 1 s window (from the same ring buffer and sample grid as classification
 ### 3.7 Haptics (`EchoApp/Haptics`)
 `CHHapticEngine` patterns: CRITICAL = 3 transients (intensity 1.0, sharpness 1.0) at 0 / 0.15 / 0.30 s; HIGH = 2 transients (0.8) at 0 / 0.25 s; MEDIUM = 1 transient (0.5); LOW = none. Each label has a 5 s cooldown.
 
+
+### 3.8 Custom ML classification system (step 7, after the main system)
+Extends coverage beyond Apple's 303 built-in labels. It is built only after steps 0–6 work end to end.
+- **Initial classes**: `car_alarm`, `smoke_alarm_chirp`, `appliance_beep` (microwave/oven/washer), `crosswalk_signal`, plus a `background` negative class. The class list lives in `custom_to_group.json`, so adding a class later means a new folder of clips plus one map entry.
+- **Data**: at least 10 (target 30+) mono clips of ≥ 16 kHz per class. Sources:
+  1. Recorded on the 16 Pro Max with a **Sample Recorder** in the debug view, which saves the FOA W channel as WAV. These are the preferred source because they match the app's mic processing.
+  2. FSD50K/Freesound clips, with each clip's license checked and recorded in `Training/data/LICENSES.csv`.
+  Raw clips are git-ignored; the manifest is committed.
+- **Training**: `Training/train.swift`, a macOS script using the CreateML framework: `MLSoundClassifier(trainingData: .labeledDirectories(at:))` with an 80/20 split by recording session. It writes `EchoCustomSounds.mlmodel` and a metrics report. The same workflow also works in the Create ML app.
+- **Runtime**: a second `SNClassifySoundRequest(mlModel:)` on the **same** `SNAudioStreamAnalyzer` as the built-in request, with the same window and overlap. `CustomSoundClassifier` conforms to `SoundClassifier`. Its labels map to sound groups through `custom_to_group.json` (`car_alarm` → Car Alarm, `smoke_alarm_chirp` → Smoke/Fire Alarm, `appliance_beep` → Alarm/Buzzer/Beep, `crosswalk_signal` → Alarm/Buzzer/Beep; `background` → ignored).
+- **Merge**: a `ClassifierMerger` (EchoCore) takes the max per group across classifiers for the same window. Thresholds for the custom groups are separate keys in `thresholds.json` (`custom:<label>`), starting at 0.7.
+- **Fallback**: if the model fails to load, the app logs a warning and continues with the built-in classifier only.
+
 ## 4. Repository layout
 
 ```
@@ -104,8 +117,9 @@ HackATL/
 │   └── Tests/EchoCoreTests/
 ├── EchoApp/
 │   ├── App/  Capture/  Classification/  Motion/  Haptics/  UI/  Probe/
-│   ├── Resources/{apple_to_group.json, thresholds.json, urgency_map.json}
+│   ├── Resources/{apple_to_group.json, custom_to_group.json, thresholds.json, urgency_map.json, EchoCustomSounds.mlmodel}
 │   └── Info.plist
+├── Training/                       step 7: train.swift (CreateML, macOS), data/ (git-ignored clips), data/LICENSES.csv
 ├── docs/superpowers/{specs,spikes,plans}/
 └── README.md
 ```
@@ -121,7 +135,8 @@ HackATL/
 | 4 | **Motion + world frame** | A fixed source keeps its world azimuth within ±15° while the phone yaws 90° |
 | 5 | **Fusion**: AzimuthBelief + EventTracker | Unit tests pass |
 | 6 | **UI + haptics + accessibility**, end-to-end wiring | Success criteria 1–4 met on device |
-| 7 | **Tuning and demo polish**: per-window diagnostics CSV, threshold tweaks, app icon, demo script | Demo checklist (§7) passes |
+| 7 | **Custom ML classification system** (after steps 0–6 are complete; §3.8): sample recorder, Create ML training script, second classifier request, group merge | Held-out accuracy ≥ 85% on custom classes; a car-alarm clip on device → Car Alarm / CRITICAL; no regression on the step 6 demo checklist |
+| — | *Deferred, later work*: **on-device tuning**: per-window diagnostics CSV, quiet/target recording sessions, threshold and localization-constant re-fit, optional in-app tuning panel, battery/thermal measurement | — |
 | — | *Stretch*: pinned alerts, 24 h history, scene profiles, background monitoring (audio-only `AVCaptureSession` in background must be verified first) | — |
 
 ## 6. FOA probe protocol (step 1 gate)
@@ -139,6 +154,7 @@ HackATL/
 - *DSP*: synthetic SN3D plane waves (noise or tone source) encoded at known azimuth and elevation → estimated azimuth error < 5° across 0–355°; two sources at 0° and 120° with different spectra → two peaks within 10°; added diffuse noise (SNR 6 dB) → error < 15° and diffuseness increases; silent input → no peaks; elevation 60° → azimuth still correct.
 - *Rotation*: device → world transforms for identity, 90° yaw and phone upright.
 - *Classification*: noisy-OR math (standard noisy-OR cases); every Apple label maps to a known group; thresholds load; urgency lookup.
+- *Custom classifier (step 7)*: every custom label maps to a known group or is explicitly ignored; `ClassifierMerger` takes the per-group max and handles a missing classifier; training report shows held-out accuracy ≥ 85%.
 - *Fusion*: belief peak is within 5° of the true angle with R ≥ 0.5 after 6 consistent updates; decays back toward uniform without evidence; events are created, refreshed and evicted at 3 s; urgency sort; per-label independence (tracker and belief behaviour).
 
 **On device**: the §6 probe protocol (regression after iOS updates) and the demo checklist: siren / knock / dog from front, back, left and right, with the phone flat and upright; rotate the phone 90° with the source fixed; check haptic tiers; check VoiceOver labels.
@@ -157,9 +173,9 @@ HackATL/
 ## 9. Risks
 
 1. **FOA quality or behavior** (accuracy, axis frame, needing a video input, latency). Mitigated by the step 1 gate.
-2. **SoundAnalysis calibration on real mic audio** differs from ESC-50. Mitigated by tunable `thresholds.json` and the step 7 diagnostics; the TFLite model can be swapped in behind the protocol.
+2. **SoundAnalysis calibration on real mic audio** differs from ESC-50. Mitigated by tunable `thresholds.json` and the deferred on-device tuning work; the TFLite model can be swapped in behind the protocol.
 3. **Simultaneous sources** blur together. Accepted for the demo.
-4. **Thermal/battery** while continuously capturing at 48 kHz × 4 channels plus FFTs. Measure in step 7; reduce the band or window rate if needed.
+4. **Thermal/battery** while continuously capturing at 48 kHz × 4 channels plus FFTs. Measure during the deferred tuning work; reduce the band or window rate if needed.
 
 ## 10. Out of scope (demo)
-Distance (near/far) estimation, scene profiles, pinned alerts, 24 h history, background monitoring, App Store distribution, iPhone models other than the 16 Pro Max.
+On-device tuning (deferred to later work), distance (near/far) estimation, on-device training of custom sounds, scene profiles, pinned alerts, 24 h history, background monitoring, App Store distribution, iPhone models other than the 16 Pro Max.
