@@ -2,10 +2,9 @@ import SwiftUI
 
 @main
 struct SoundSightApp: App {
+    @State private var model = AppModel()
+
     var body: some Scene {
-        WindowGroup {
-            Text("SoundSight")
-                .font(.largeTitle.bold())
-        }
+        WindowGroup { MainView(model: model) }
     }
 }
