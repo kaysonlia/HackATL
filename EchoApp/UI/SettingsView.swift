@@ -13,6 +13,8 @@ struct SettingsView: View {
         "Cough/Sneeze": "Someone coughing or sneezing nearby.",
     ]
 
+    private static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–"
+
     var body: some View {
         NavigationStack {
             Form {
@@ -66,6 +68,9 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 } header: {
                     Text("Never shown")
+                }
+                Section {
+                    LabeledContent("Version", value: Self.version)
                 }
             }
             .navigationTitle("Settings")

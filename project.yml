@@ -31,6 +31,7 @@ targets:
       path: EchoApp/Info.plist
       properties:
         CFBundleDisplayName: SoundSight
+        CFBundleShortVersionString: "2.2"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSMicrophoneUsageDescription: SoundSight listens to the sounds around you to identify them and show where they come from. Audio never leaves your iPhone.
@@ -61,6 +62,7 @@ targets:
       path: EchoLiveActivity/Info.plist
       properties:
         CFBundleDisplayName: SoundSight
+        CFBundleShortVersionString: "2.2"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
