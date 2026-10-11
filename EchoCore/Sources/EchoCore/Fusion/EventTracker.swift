@@ -9,6 +9,8 @@ public struct SoundEvent: Sendable, Identifiable {
     public var belief: AzimuthBelief
     public var firstSeen: Double
     public var lastSeen: Double
+    /// Smoothed omni level (approximate dB SPL) over the windows where this group was active; nil until measured.
+    public var levelDB: Double?
 }
 
 /// Rolling set of active sound events with per-label direction beliefs (spec §3.4).
@@ -17,13 +19,17 @@ public final class EventTracker {
     public let evictAfter: Double
     public let emaAlpha: Double
     public let diffusenessCutoff: Double
+    /// Groups that never become events (urgency spec §2.5).
+    public let ignoredGroups: Set<String>
     private var byGroup: [String: SoundEvent] = [:]
 
-    public init(urgencyMap: UrgencyMap, evictAfter: Double = 3, emaAlpha: Double = 0.5, diffusenessCutoff: Double = 0.8) {
+    public init(urgencyMap: UrgencyMap, evictAfter: Double = 3, emaAlpha: Double = 0.5, diffusenessCutoff: Double = 0.8,
+                ignoredGroups: Set<String> = ["Silence"]) {
         self.urgencyMap = urgencyMap
         self.evictAfter = evictAfter
         self.emaAlpha = emaAlpha
         self.diffusenessCutoff = diffusenessCutoff
+        self.ignoredGroups = ignoredGroups
     }
 
     /// Events sorted by urgency (highest first), then confidence.
@@ -32,20 +38,23 @@ public final class EventTracker {
     }
 
     /// Feeds one joined window. `active` holds groups at or above threshold; `now` is seconds
-    /// on the capture timeline. Returns events that were not being tracked before this window.
+    /// on the capture timeline; `levelDB` is the window's omni level, if known.
+    /// Returns events that were not being tracked before this window.
     @discardableResult
-    public func ingest(active: [String: Double], doa: DOAFrame?, now: Double) -> [SoundEvent] {
+    public func ingest(active: [String: Double], doa: DOAFrame?, now: Double, levelDB: Double? = nil) -> [SoundEvent] {
         byGroup = byGroup.filter { now - $0.value.lastSeen <= evictAfter }
         let usable = doa.flatMap { $0.diffuseness <= diffusenessCutoff && !$0.peaks.isEmpty ? $0.peaks : nil }
+        let active = active.filter { !ignoredGroups.contains($0.key) }
         var created: [SoundEvent] = []
         for (group, score) in active {
             if var e = byGroup[group] {
                 e.confidence = emaAlpha * score + (1 - emaAlpha) * e.confidence
                 e.lastSeen = now
+                if let levelDB { e.levelDB = e.levelDB.map { emaAlpha * levelDB + (1 - emaAlpha) * $0 } ?? levelDB }
                 byGroup[group] = e
             } else {
                 let e = SoundEvent(group: group, urgency: urgencyMap.urgency(for: group), confidence: score,
-                                   belief: AzimuthBelief(), firstSeen: now, lastSeen: now)
+                                   belief: AzimuthBelief(), firstSeen: now, lastSeen: now, levelDB: levelDB)
                 byGroup[group] = e
                 created.append(e)
             }
