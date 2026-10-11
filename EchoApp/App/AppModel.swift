@@ -31,6 +31,8 @@ final class AppModel {
     var ambientProfile: [Double] = []
     /// Sudden sounds: Unclassified arrows, or the sound they turned into.
     var markers: [MarkerDisplay] = []
+    /// True while the phone is held upright: directions pause (only the screen plane carries direction).
+    var isHeldUpright = false
     /// When listening last started; drives the 3 s radar sweep.
     var listeningSince: Date?
     /// Debug: classify with YAMNet even in the foreground (it always runs in the background).
@@ -59,7 +61,8 @@ final class AppModel {
     /// Extra lines for the status banner.
     var notes: [String] {
         let loudRoom = (ambientDB ?? 0) >= 80 ? "Very loud room: some sounds may be missed." : nil
-        return [classifierWarning, notificationsNote, liveActivityNote, loudRoom].compactMap { $0 }
+        let holdFlat = isListening && isHeldUpright ? "Hold the phone flat (screen up) for 360° direction." : nil
+        return [holdFlat, classifierWarning, notificationsNote, liveActivityNote, loudRoom].compactMap { $0 }
     }
     var calibration: FOAAxisCalibration {
         didSet {
@@ -139,7 +142,12 @@ final class AppModel {
             status = .error("Couldn't load the sound tables: \(error.localizedDescription)")
         }
         capture.onFormat = { [weak self] format in Task { @MainActor in self?.probe.format = format } }
-        motion.onUpdate = { [weak self] bearing in self?.forwardBearing = bearing }
+        motion.onUpdate = { [weak self] bearing in
+            guard let self else { return }
+            self.forwardBearing = bearing
+            let upright = !ForwardHeading.directionUsable(deviceToWorld: self.motion.deviceToWorld())
+            if upright != self.isHeldUpright { self.isHeldUpright = upright }
+        }
         liveActivity.onProblem = { [weak self] message in self?.liveActivityNote = message }
         observeSession()
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
@@ -247,10 +255,13 @@ final class AppModel {
         probe.ingest(summary, calibration: effectiveCalibration, now: Date())
         // Debug: once a second, the raw (device-frame) bearing with the phone's orientation.
         if windowsSeen % 2 == 0, summary.totalEnergy > 0 {
-            ProbeState.appendToDiagnosticsFile(String(format: "%@  dial %@ diff %.2f rmsW %.4f orient %@ lastUpright %@ corr %.0f",
+            let radar = summary.doa.peaks.max(by: { $0.weight < $1.weight })
+                .map { String(format: "%3.0f°", ForwardHeading.radarAngle(worldBearing: $0.bearing, forward: forwardBearing)) } ?? "–"
+            ProbeState.appendToDiagnosticsFile(String(format: "%@  dial %@ elev %@ radar %@ diff %.2f rmsW %.4f orient %@ lastUpright %@ corr %.0f fwd %.0f",
                 Date().formatted(date: .omitted, time: .standard), probe.rawBearing.map { String(format: "%3.0f°", $0) } ?? "–",
+                probe.rawElevation.map { String(format: "%+3.0f°", $0) } ?? "–", radar,
                 summary.diffuseness, summary.channelRMS.first ?? 0, Self.name(UIDevice.current.orientation), Self.name(lastUpright),
-                orientationCompensation.correction))
+                orientationCompensation.correction, forwardBearing))
         }
     }
 

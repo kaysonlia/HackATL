@@ -23,6 +23,12 @@ public struct ForwardHeading: Sendable {
         return Circular.bearing(d * forward)
     }
 
+    /// FOA direction comes only from the screen plane (the thickness axis is unreliable), so it is
+    /// usable while the screen faces up or down within 60° of level, not when the phone is held upright.
+    public static func directionUsable(deviceToWorld d: simd_float3x3) -> Bool {
+        abs(Double((d * SIMD3<Float>(0, 0, 1)).z)) >= 0.5
+    }
+
     /// Angle to draw a world bearing at on the radar (0° = up / forward).
     public static func radarAngle(worldBearing: Double, forward: Double) -> Double {
         Circular.wrap360(worldBearing - forward)

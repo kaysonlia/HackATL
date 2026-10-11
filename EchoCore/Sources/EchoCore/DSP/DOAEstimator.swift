@@ -6,6 +6,10 @@ public struct DOAConfig: Sendable {
     public var maxPeaks = 3
     public var minPeakFraction = 0.25
     public var minPeakSeparation = 30.0
+    /// Drop the device z component (through the phone's thickness) before rotating to the world frame.
+    /// On iPhone 16 Pro Max that FOA axis leans strongly toward the camera for every source (device log
+    /// 2026-10-11), so only the screen plane carries usable direction.
+    public var ignoreThicknessAxis = true
 
     public init() {}
 
@@ -58,10 +62,11 @@ public final class DOAEstimator {
     public func estimate(_ result: IntensityResult, windowStart: Int64, calibration: FOAAxisCalibration,
                          deviceToWorld: simd_float3x3) -> DOAFrame {
         let n = config.binCount
-        let toWorld = deviceToWorld * calibration.matrix
         var raw = [Double](repeating: 0, count: n)
         for bin in result.bins {
-            let v = toWorld * bin.raw
+            var device = calibration.matrix * bin.raw
+            if config.ignoreThicknessAxis { device.z = 0 }
+            let v = deviceToWorld * device
             let h = Double(simd_length(SIMD2(v.x, v.y)))
             guard h > 0 else { continue }
             raw[Int(Circular.bearing(v) / config.binWidth) % n] += h

@@ -79,3 +79,12 @@ struct ForwardHeadingTests {
         #expect(ForwardHeading.radarAngle(worldBearing: 10, forward: 350) == 20)
     }
 }
+
+struct UprightGateTests {
+    @Test func directionIsUsableOnlyNearFlat() {
+        #expect(ForwardHeading.directionUsable(deviceToWorld: tilt(0)))
+        #expect(ForwardHeading.directionUsable(deviceToWorld: tilt(50)))  // tilted in the hand: still fine
+        #expect(!ForwardHeading.directionUsable(deviceToWorld: tilt(70)))  // held up to look at it / upright
+        #expect(ForwardHeading.directionUsable(deviceToWorld: yawRotation(clockwise: 120) * tilt(30)))
+    }
+}

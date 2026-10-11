@@ -150,8 +150,10 @@ final class AudioPipeline: @unchecked Sendable {
         let level = UrgencyScore.level(rms: Double(Self.rms(block.w)))
         ambient.add(level: level)
         let now = Double(block.startSample) / sampleRate
-        let doa = estimator.estimate(estimator.intensity.analyze(block), windowStart: block.startSample,
-                                     calibration: calibration, deviceToWorld: deviceToWorld())
+        let toWorld = deviceToWorld()
+        var doa = estimator.estimate(estimator.intensity.analyze(block), windowStart: block.startSample,
+                                     calibration: calibration, deviceToWorld: toWorld)
+        if !ForwardHeading.directionUsable(deviceToWorld: toWorld) { doa.peaks = []; doa.diffuseness = 1 }
         // 10 updates/s for named sounds: a block clearly above the room nudges their directions.
         if level >= ambient.level + 4, doa.diffuseness < 0.8, !doa.peaks.isEmpty, !tracker.events.isEmpty {
             tracker.nudge(peaks: doa.peaks, now: now)
@@ -162,7 +164,7 @@ final class AudioPipeline: @unchecked Sendable {
                 markerTracker.spike(bearing: peak.bearing, level: level, now: now)
             }
         } else {
-            ambientDirection.add(histogram: doa.histogram)
+            if !doa.peaks.isEmpty { ambientDirection.add(histogram: doa.histogram) }
         }
         markerTracker.expire(now: now)
         onScene?(SceneUpdate(now: now, ambientDB: ambient.level, ambientProfile: ambientDirection.profile,
@@ -226,7 +228,10 @@ final class AudioPipeline: @unchecked Sendable {
         let cal = calibration
         for window in windows {
             let intensity = estimator.intensity.analyze(window)
-            let doa = estimator.estimate(intensity, windowStart: window.startSample, calibration: cal, deviceToWorld: deviceToWorld())
+            let toWorld = deviceToWorld()
+            var doa = estimator.estimate(intensity, windowStart: window.startSample, calibration: cal, deviceToWorld: toWorld)
+            // Held upright, the screen plane is vertical: no usable horizontal direction. Keep beliefs as they are.
+            if !ForwardHeading.directionUsable(deviceToWorld: toWorld) { doa.peaks = []; doa.diffuseness = 1 }
             levels[window.startSample] = UrgencyScore.level(rms: Double(Self.rms(window.w)))
             let cutoff = window.startSample - Int64(8 * acc.hopLength)
             levels = levels.filter { $0.key >= cutoff }

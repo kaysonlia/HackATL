@@ -89,3 +89,20 @@ struct DOAEstimatorTests {
         #expect(f.windowStart == 24_000)
     }
 }
+
+/// Device log 2026-10-11: the FOA axis through the phone's thickness (screen ↔ camera) carries a strong
+/// constant lean toward the camera (elevation −50…−85° for every source). Tilting the phone must not let
+/// it leak into the horizontal bearing.
+struct ThicknessAxisTests {
+    @Test func thicknessBiasDoesNotShiftBearingOnATiltedPhone() throws {
+        var rng = SeededRNG(seed: 21)
+        let estimator = try DOAEstimator()
+        let source = FOASynth.planeWave(FOASynth.whiteNoise(rng: &rng), bearing: 90)  // to the phone's right
+        // Constant lean along device z, correlated with W (as measured on device).
+        let biased = FOAWindow(w: source.w, x: source.x, y: source.y,
+                               z: zip(source.z, source.w).map { $0 + 0.8 * $1 },
+                               sampleRate: source.sampleRate, startSample: 0)
+        let f = estimator.estimate(biased, calibration: .identity, deviceToWorld: tilt(40))
+        #expect(abs(Circular.difference(f.peaks[0].bearing, 90)) < 5)
+    }
+}
