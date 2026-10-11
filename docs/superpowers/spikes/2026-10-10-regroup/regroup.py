@@ -24,13 +24,13 @@ OLD_TO_NEW = {
 NONE = None
 APPLE_OVERRIDES = {
     'foghorn': 'Traffic Warning', 'bicycle_bell': 'Traffic Warning', 'boom': 'Gunshot/Explosion', 'door_slam': 'Door',
-    'tap': NONE, 'slap_smack': NONE, 'wood_cracking': NONE, 'glass_clink': NONE, 'squeak': NONE,
+    'tap': NONE, 'slap_smack': NONE, 'thump_thud': NONE, 'wood_cracking': NONE, 'glass_clink': NONE, 'squeak': NONE,
     'power_windows': NONE, 'skateboard': NONE, 'horse_clip_clop': NONE, 'coyote_howl': NONE,
 }
 APPLE_WATER_KEEP = {'water_tap_faucet', 'sink_filling_washing', 'bathtub_filling_washing', 'liquid_filling_container', 'toilet_flush'}
 YAM_OVERRIDES = {
     'Foghorn': 'Traffic Warning', 'Bicycle bell': 'Traffic Warning', 'Boom': 'Gunshot/Explosion', 'Slam': 'Door',
-    'Tap': NONE, 'Squeak': NONE, 'Creak': NONE, 'Burst, pop': NONE, 'Thunk': NONE, 'Slap, smack': NONE,
+    'Tap': NONE, 'Thump, thud': NONE, 'Squeak': NONE, 'Creak': NONE, 'Burst, pop': NONE, 'Thunk': NONE, 'Slap, smack': NONE,
     'Whack, thwack': NONE, 'Clang': NONE, 'Chink, clink': NONE, 'Glass': NONE,
     'Telephone dialing, DTMF': NONE, 'Dial tone': NONE, 'Busy signal': NONE,
 }
@@ -94,7 +94,8 @@ def yam_scores():
     return out
 
 report = {}
-for nm, G, lo in [('apple', apple_scores(), 0.30), ('yamnet', yam_scores(), 0.20)]:
+# Apple floor 0.40 (was 0.30): on device a 0.30 Crash/Glass threshold fired on ordinary impacts.
+for nm, G, lo in [('apple', apple_scores(), 0.40), ('yamnet', yam_scores(), 0.20)]:
     C = G.max(axis=1)
     thr = {}
     for g in GROUPS:

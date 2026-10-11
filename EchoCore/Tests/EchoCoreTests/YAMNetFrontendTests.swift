@@ -38,7 +38,7 @@ struct YAMNetFrontendTests {
     @Test func bundledYAMNetTablesAreConsistent() throws {
         let r = try YAMNetResources.bundled()
         let urgency = try ClassificationResources.bundled().urgency
-        #expect(r.mapper.labelToGroup.count == 129)
+        #expect(r.mapper.labelToGroup.count == 128)
         #expect(Set(r.mapper.labelToGroup.values).isSubset(of: urgency.groups))
         #expect(urgency.groups.allSatisfy { r.thresholds.thresholds[$0] != nil })
         #expect(r.mapper.labelToGroup["390"] == "Siren")

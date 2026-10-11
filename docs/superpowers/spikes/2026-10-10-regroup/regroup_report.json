@@ -2,19 +2,19 @@
  "apple": {
   "thresholds": {
    "Siren": 0.652,
-   "Smoke Alarm": 0.309,
+   "Smoke Alarm": 0.4,
    "Gunshot/Explosion": 0.841,
    "Traffic Warning": 0.85,
    "Screaming/Shouting": 0.639,
-   "Crash/Glass Breaking": 0.3,
+   "Crash/Glass Breaking": 0.4,
    "Vehicle": 0.85,
    "Door": 0.85,
    "Phone Ringing": 0.528,
    "Baby/Crying": 0.735,
    "Dog": 0.85,
-   "Beeping/Timer": 0.358,
+   "Beeping/Timer": 0.4,
    "Speech": 0.417,
-   "Footsteps": 0.3,
+   "Footsteps": 0.4,
    "Water Running": 0.628,
    "Power Tool": 0.829,
    "Cough/Sneeze": 0.561
@@ -23,18 +23,18 @@
    "Siren": 1.0,
    "Gunshot/Explosion": 0.97,
    "Traffic Warning": 0.9,
-   "Crash/Glass Breaking": 0.8,
+   "Crash/Glass Breaking": 0.75,
    "Vehicle": 0.86,
    "Door": 0.65,
    "Baby/Crying": 1.0,
    "Dog": 1.0,
    "Beeping/Timer": 0.97,
-   "Footsteps": 0.72,
+   "Footsteps": 0.65,
    "Water Running": 1.0,
    "Power Tool": 0.94,
    "Cough/Sneeze": 0.97
   },
-  "false_alarm_rate_unrelated_clips": 0.267
+  "false_alarm_rate_unrelated_clips": 0.252
  },
  "yamnet": {
   "thresholds": {
@@ -43,7 +43,7 @@
    "Gunshot/Explosion": 0.85,
    "Traffic Warning": 0.257,
    "Screaming/Shouting": 0.2,
-   "Crash/Glass Breaking": 0.217,
+   "Crash/Glass Breaking": 0.2,
    "Vehicle": 0.85,
    "Door": 0.429,
    "Phone Ringing": 0.2,
@@ -71,6 +71,6 @@
    "Power Tool": 0.8,
    "Cough/Sneeze": 0.88
   },
-  "false_alarm_rate_unrelated_clips": 0.281
+  "false_alarm_rate_unrelated_clips": 0.282
  }
 }

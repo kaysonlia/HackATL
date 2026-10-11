@@ -54,3 +54,20 @@ struct SoundGroupTests {
         #expect(v.shown(scores, enabled: ["Power Tool"]) == ["Siren": 0.9, "Power Tool": 0.95])
     }
 }
+
+/// Device 2026-10-11: sounds kept reading "Crash/Glass Breaking". Its Apple threshold was the 0.30 clamp
+/// floor and it included `thump_thud`, a generic impact label that fires mostly on claps and footsteps.
+struct CrashGroupTests {
+    @Test func genericImpactsDontCountAsCrash() throws {
+        let apple = try ClassificationResources.bundled().mapper.labelToGroup
+        #expect(apple["thump_thud"] == nil)
+        #expect(apple["glass_breaking"] == "Crash/Glass Breaking")
+        let yam = try YAMNetResources.bundled().mapper.labelToGroup
+        #expect(yam["454"] == nil)  // Thump, thud
+    }
+
+    @Test func appleThresholdsHaveAFloorOfPointFour() throws {
+        let t = try ClassificationResources.bundled().thresholds
+        #expect(t.thresholds.values.allSatisfy { $0 >= 0.4 })
+    }
+}

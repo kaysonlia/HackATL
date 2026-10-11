@@ -35,7 +35,7 @@ struct ClassificationTests {
 
     @Test func bundledResourcesAreConsistent() throws {
         let r = try ClassificationResources.bundled()
-        #expect(r.mapper.labelToGroup.count == 85)
+        #expect(r.mapper.labelToGroup.count == 84)
         #expect(r.urgency.groups.count == 17)
         // Every Apple label maps to a group the urgency table knows.
         #expect(Set(r.mapper.labelToGroup.values).isSubset(of: r.urgency.groups))
