@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Main screen with the live event list. Task 14 adds the radar.
 struct MainView: View {
     @Bindable var model: AppModel
     @State private var showProbe = false
@@ -10,6 +9,8 @@ struct MainView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     StatusBanner(status: model.status, classifierWarning: model.classifierWarning)
+                    RadarView(events: model.events, forward: model.forwardBearing, isListening: model.isListening)
+                        .aspectRatio(1, contentMode: .fit)
                     EventListView(events: model.events, forward: model.forwardBearing)
                 }
                 .padding()
