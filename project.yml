@@ -23,6 +23,7 @@ targets:
       - path: EchoShared
     dependencies:
       - package: EchoCore
+      - target: EchoLiveActivity
     configFiles:
       Debug: EchoApp/Config/App.xcconfig
       Release: EchoApp/Config/App.xcconfig
@@ -35,8 +36,33 @@ targets:
         NSMicrophoneUsageDescription: SoundSight listens to the sounds around you to identify them and show where they come from. Audio never leaves your iPhone.
         NSMotionUsageDescription: SoundSight uses motion sensors to keep sound directions fixed as you turn.
         UIBackgroundModes: [audio]
+        NSSupportsLiveActivities: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hackatl.soundsight
         TARGETED_DEVICE_FAMILY: "1"
     scheme: {}
+  EchoLiveActivity:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: EchoLiveActivity
+        excludes:
+          - "Info.plist"
+      - path: EchoShared
+    dependencies:
+      - package: EchoCore
+    configFiles:
+      Debug: EchoApp/Config/App.xcconfig
+      Release: EchoApp/Config/App.xcconfig
+    info:
+      path: EchoLiveActivity/Info.plist
+      properties:
+        CFBundleDisplayName: SoundSight
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hackatl.soundsight.liveactivity
+        TARGETED_DEVICE_FAMILY: "1"

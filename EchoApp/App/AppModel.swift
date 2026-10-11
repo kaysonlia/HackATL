@@ -24,6 +24,7 @@ final class AppModel {
     var forwardBearing: Double = 0
     var classifierWarning: String?
     var notificationsNote: String?
+    var liveActivityNote: String?
     /// When listening last started; drives the 3 s radar sweep.
     var listeningSince: Date?
     /// Debug: classify with YAMNet even in the foreground (it always runs in the background).
@@ -50,7 +51,7 @@ final class AppModel {
     @ObservationIgnored private var classificationsAtBackground = 0
     var probe = ProbeState()
     /// Extra lines for the status banner.
-    var notes: [String] { [classifierWarning, notificationsNote].compactMap { $0 } }
+    var notes: [String] { [classifierWarning, notificationsNote, liveActivityNote].compactMap { $0 } }
     var calibration: FOAAxisCalibration {
         didSet {
             pipeline?.calibration = calibration
@@ -64,6 +65,7 @@ final class AppModel {
     @ObservationIgnored private let motion = MotionProvider()
     @ObservationIgnored private let haptics = HapticsManager()
     @ObservationIgnored private let notifier = UrgentNotifier()
+    @ObservationIgnored private let liveActivity = LiveActivityController()
     @ObservationIgnored private var pipeline: AudioPipeline?
     @ObservationIgnored private var sourceLevels = SourceLevels(levels: [:])
     @ObservationIgnored private var announced: Set<String> = []
@@ -110,6 +112,7 @@ final class AppModel {
         }
         capture.onFormat = { [weak self] format in Task { @MainActor in self?.probe.format = format } }
         motion.onUpdate = { [weak self] bearing in self?.forwardBearing = bearing }
+        liveActivity.onProblem = { [weak self] message in self?.liveActivityNote = message }
         observeSession()
     }
 
@@ -135,6 +138,7 @@ final class AppModel {
         capture.start()
         isListening = true
         listeningSince = Date()
+        liveActivity.start()
         if !capture.foaEnabled {
             status = .directionUnavailable("this device can't capture spatial (FOA) audio. Sounds are still identified.")
         } else if !motion.isAvailable {
@@ -146,6 +150,7 @@ final class AppModel {
 
     func stop() {
         notifier.clear()
+        liveActivity.stop()
         capture.stop()
         motion.stop()
         isListening = false
@@ -201,6 +206,7 @@ final class AppModel {
         }
         announceUrgent(displays)
         notifier.consider(displays, forward: forwardBearing, now: output.now, isForeground: isForeground)
+        liveActivity.show(displays.first, forward: forwardBearing, paused: false)
     }
 
     /// VoiceOver announces each event once, when it first reaches Urgent.
@@ -215,10 +221,18 @@ final class AppModel {
     private func observeSession() {
         let center = NotificationCenter.default
         observers.append(center.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: capture.session, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { if self?.isListening == true { self?.status = .interrupted } }
+            MainActor.assumeIsolated {
+                guard let self, self.isListening else { return }
+                self.status = .interrupted
+                self.liveActivity.show(self.events.first, forward: self.forwardBearing, paused: true)
+            }
         })
         observers.append(center.addObserver(forName: AVCaptureSession.interruptionEndedNotification, object: capture.session, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { if self?.isListening == true { self?.status = .listening } }
+            MainActor.assumeIsolated {
+                guard let self, self.isListening else { return }
+                self.status = .listening
+                self.liveActivity.show(self.events.first, forward: self.forwardBearing, paused: false)
+            }
         })
         observers.append(center.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: capture.session, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
