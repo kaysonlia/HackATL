@@ -233,7 +233,7 @@ final class AppModel {
         guard isListening else { return }
         ambientDB = scene.ambientDB
         ambientProfile = scene.ambientProfile
-        markers = MarkerDisplay.from(scene.markers, events: events, now: scene.now)
+        markers = MarkerDisplay.from(scene.markers, events: events)
     }
 
     private func apply(_ summary: WindowSummary) {

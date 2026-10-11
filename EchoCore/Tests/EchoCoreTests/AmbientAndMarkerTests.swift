@@ -18,7 +18,8 @@ struct AmbientTests {
     @Test func spikeRuleRidesOnAmbient() {
         #expect(AmbientTracker.isSpike(level: 58, ambient: 50))
         #expect(!AmbientTracker.isSpike(level: 57.9, ambient: 50))
-        #expect(!AmbientTracker.isSpike(level: 49, ambient: 30))  // below the 50 dB floor
+        #expect(!AmbientTracker.isSpike(level: 44, ambient: 30))  // below the 45 dB floor
+        #expect(AmbientTracker.isSpike(level: 46, ambient: 30))
         #expect(AmbientTracker.isSpike(level: 92, ambient: 80))
     }
 
@@ -55,9 +56,34 @@ struct MarkerTests {
         #expect(first?.claimedBy == nil)
     }
 
-    @Test func markersFadeAfterQuiet() {
+    @Test func unclaimedMarkerClassifiesForFiveSecondsThenStaysUnclassified() {
         var m = MarkerTracker()
         m.spike(bearing: 0, level: 70, now: 0)
+        let marker = m.markers[0]
+        #expect(m.state(of: marker, now: 4.9) == .classifying)
+        #expect(m.state(of: marker, now: 5.1) == .unclassified)
+        #expect(m.opacity(of: marker, now: 6) == 1)
+        #expect(abs(m.opacity(of: marker, now: 7.5) - 0.5) < 1e-9)  // fades over the last second
+        m.expire(now: 7.9)
+        #expect(m.markers.count == 1)
+        m.expire(now: 8.1)  // shown as Unclassified for 3 s after the 5 s of classifying
+        #expect(m.markers.isEmpty)
+    }
+
+    @Test func ongoingSpikesKeepMarkerAlive() {
+        var m = MarkerTracker()
+        m.spike(bearing: 0, level: 70, now: 0)
+        m.spike(bearing: 5, level: 70, now: 6)
+        m.expire(now: 8.5)
+        #expect(m.markers.count == 1)
+        #expect(m.state(of: m.markers[0], now: 8.5) == .unclassified)
+    }
+
+    @Test func claimedMarkerFadesSoonAfterLastSpike() {
+        var m = MarkerTracker()
+        m.spike(bearing: 0, level: 70, now: 0)
+        m.claim(group: "Dog", bearing: nil, windowStart: 0)
+        #expect(m.state(of: m.markers[0], now: 1) == .claimed("Dog"))
         m.expire(now: 2.4)
         #expect(m.markers.count == 1)
         m.expire(now: 2.6)

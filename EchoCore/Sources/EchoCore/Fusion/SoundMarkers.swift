@@ -10,12 +10,32 @@ public struct SoundMarker: Sendable, Identifiable, Equatable {
     public var claimedBy: String?
 }
 
+public enum MarkerState: Sendable, Equatable {
+    /// Shown as "Classifying…" while the classifier may still name it.
+    case classifying
+    /// Nothing named it within `classifyingFor` seconds.
+    case unclassified
+    case claimed(String)
+}
+
+/// A marker with what to draw, for the UI.
+public struct MarkerSnapshot: Sendable, Equatable {
+    public var marker: SoundMarker
+    public var state: MarkerState
+    /// 1 until the marker's last second, then fading to 0.
+    public var opacity: Double
+}
+
 /// Spikes become markers at once; a later classification of the same sound (close in time and
-/// direction) claims the marker so the arrow turns into that sound. Unclaimed markers stay
-/// "Unclassified" and fade 2.5 s after their last spike.
+/// direction) claims the marker so the arrow turns into that sound. An unclaimed marker reads
+/// "Classifying…" for 5 s, then "Unclassified" for 3 s more (counted from its last spike if the
+/// sound continues), then disappears. A claimed marker fades 2.5 s after its last spike, by which
+/// time the sound's own arrow has taken over.
 public struct MarkerTracker: Sendable {
     public var mergeAngle = 30.0
     public var fadeAfter = 2.5
+    public var classifyingFor = 5.0
+    public var unclassifiedHold = 3.0
     public var claimAngle = 45.0
     /// A classification window [start, start + 1 s] claims spikes from 0.5 s before it to its end.
     public var claimLead = 0.5
@@ -38,8 +58,27 @@ public struct MarkerTracker: Sendable {
         }
     }
 
+    public func state(of m: SoundMarker, now: Double) -> MarkerState {
+        if let group = m.claimedBy { return .claimed(group) }
+        return now - m.firstSpike < classifyingFor ? .classifying : .unclassified
+    }
+
+    /// When the marker disappears.
+    public func endTime(of m: SoundMarker) -> Double {
+        m.claimedBy != nil ? m.lastSpike + fadeAfter : max(m.lastSpike, m.firstSpike + classifyingFor) + unclassifiedHold
+    }
+
+    public func opacity(of m: SoundMarker, now: Double) -> Double {
+        min(1, max(0, endTime(of: m) - now))
+    }
+
+    public func snapshot(now: Double) -> [MarkerSnapshot] {
+        markers.map { MarkerSnapshot(marker: $0, state: state(of: $0, now: now), opacity: opacity(of: $0, now: now)) }
+    }
+
     public mutating func expire(now: Double) {
-        markers.removeAll { now - $0.lastSpike > fadeAfter }
+        let tracker = self
+        markers.removeAll { now > tracker.endTime(of: $0) }
     }
 
     /// A shown group was detected in the classification window starting at `windowStart`;

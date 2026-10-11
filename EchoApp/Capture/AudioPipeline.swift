@@ -18,7 +18,7 @@ struct SceneUpdate: Sendable {
     var now: Double
     var ambientDB: Double
     var ambientProfile: [Double]
-    var markers: [SoundMarker]
+    var markers: [MarkerSnapshot]
 }
 
 struct TrackerOutput: Sendable {
@@ -159,7 +159,7 @@ final class AudioPipeline: @unchecked Sendable {
         }
         markerTracker.expire(now: now)
         onScene?(SceneUpdate(now: now, ambientDB: ambient.level, ambientProfile: ambientDirection.profile,
-                             markers: markerTracker.markers))
+                             markers: markerTracker.snapshot(now: now)))
     }
 
     /// Builds the classifier the app currently wants, starting at the current capture sample.

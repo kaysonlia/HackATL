@@ -1,3 +1,4 @@
+import Foundation
 import EchoCore
 
 /// What the UI needs for one tracked sound.
@@ -58,28 +59,44 @@ struct EventDisplay: Identifiable, Equatable {
     }
 }
 
-/// A sudden sound on the radar: blue "Unclassified" until the classifier names it, then that sound's
-/// name and color until its own direction estimate takes over.
+/// A sudden sound on the radar: "Classifying…" (blue) until the classifier names it, then that sound's
+/// name and color until its own direction estimate takes over; "Unclassified" if nothing names it in 5 s.
 struct MarkerDisplay: Identifiable, Equatable {
+    enum Kind: Equatable { case classifying, unclassified, classified }
+
     let id: Int
     var worldBearing: Double
-    var label: String
-    /// Urgency score once classified; nil draws the Unclassified blue.
+    var kind: Kind
+    /// The classified group's name; empty otherwise.
+    var group: String
+    /// Urgency score once classified; nil draws the blue.
     var score: Double?
-    /// 1 while recent, fading to 0 by 2.5 s after the last spike.
+    /// 1 until the marker's last second, then fading to 0.
     var opacity: Double
 
-    /// `events` decide hand-off: a claimed marker disappears once its event shows an arrow.
-    static func from(_ markers: [SoundMarker], events: [EventDisplay], now: Double) -> [MarkerDisplay] {
-        markers.compactMap { m in
-            let age = now - m.lastSpike
-            let opacity = age < 1.5 ? 1 : max(0, (2.5 - age) / 1.0)
-            guard let group = m.claimedBy else {
-                return MarkerDisplay(id: m.id, worldBearing: m.bearing, label: "Unclassified", score: nil, opacity: opacity)
+    /// `events` decide hand-off: a classified marker disappears once its event shows an arrow.
+    static func from(_ snapshots: [MarkerSnapshot], events: [EventDisplay]) -> [MarkerDisplay] {
+        snapshots.compactMap { s in
+            let m = s.marker
+            switch s.state {
+            case .classifying:
+                return MarkerDisplay(id: m.id, worldBearing: m.bearing, kind: .classifying, group: "", score: nil, opacity: s.opacity)
+            case .unclassified:
+                return MarkerDisplay(id: m.id, worldBearing: m.bearing, kind: .unclassified, group: "", score: nil, opacity: s.opacity)
+            case .claimed(let group):
+                let event = events.first { $0.group == group }
+                if event?.worldBearing != nil { return nil }
+                return MarkerDisplay(id: m.id, worldBearing: m.bearing, kind: .classified, group: group, score: event?.score, opacity: s.opacity)
             }
-            let event = events.first { $0.group == group }
-            if event?.worldBearing != nil { return nil }
-            return MarkerDisplay(id: m.id, worldBearing: m.bearing, label: group, score: event?.score, opacity: opacity)
+        }
+    }
+
+    /// "Classifying." → ".." → "..." cycling three times a second.
+    func label(at date: Date) -> String {
+        switch kind {
+        case .classifying: "Classifying" + String(repeating: ".", count: Int(date.timeIntervalSinceReferenceDate * 3) % 3 + 1)
+        case .unclassified: "Unclassified"
+        case .classified: group
         }
     }
 }

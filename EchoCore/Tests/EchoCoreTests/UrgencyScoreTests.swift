@@ -16,10 +16,12 @@ struct UrgencyScoreTests {
     }
 
     @Test func levelFromRMS() {
-        #expect(UrgencyScore.level(rms: 1) == 120)
-        #expect(abs(UrgencyScore.level(rms: 0.01) - 80) < 1e-9)
+        // Device: a silent room is RMS ~0.006 on the FOA omni channel → ~35 dB; typing nearby ~0.01–0.03 → 40–50 dB.
+        #expect(UrgencyScore.level(rms: 1) == 80)
+        #expect(abs(UrgencyScore.level(rms: 0.01) - 40) < 1e-9)
+        #expect(UrgencyScore.level(rms: 0.006) < 40)
         #expect(UrgencyScore.level(rms: 0) == 0)
-        #expect(UrgencyScore.level(rms: 1e-9) == 0)
+        #expect(UrgencyScore.level(rms: 1e-5) == 0)
     }
 
     @Test func distanceAndFactorsClamp() {

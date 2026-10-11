@@ -2,8 +2,10 @@ import Foundation
 
 /// Continuous urgency in [0, 1] from class tier, loudness and approximate distance (urgency spec §2).
 public enum UrgencyScore {
-    /// Added to dBFS to approximate dB SPL. The iPhone mic is uncalibrated; refine in the tuning pass.
-    public static let dbOffset = 120.0
+    /// Added to dBFS to approximate dB SPL. Apple's FOA stream is strongly gained: on device a silent room
+    /// reads about −45 dBFS on the omni channel and typing nearby −40 to −30, so +80 maps them to ~35 and
+    /// 40–50 dB SPL. (The first guess, +120, made a silent room read 77 dB.) Uncalibrated; tune on device.
+    public static let dbOffset = 80.0
     /// Scores at or above this are "Urgent": notification, VoiceOver announcement, triple haptic.
     public static let urgentThreshold = 0.75
 

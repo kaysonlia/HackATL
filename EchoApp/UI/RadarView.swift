@@ -17,7 +17,7 @@ struct RadarView: View {
     static let ambientBlue = Color(red: 0.45, green: 0.75, blue: 1.0)
 
     var body: some View {
-        TimelineView(.animation(paused: !isSweeping)) { context in
+        TimelineView(.animation(paused: !isSweeping && !markers.contains { $0.kind == .classifying })) { context in
             Canvas { ctx, size in
                 let c = CGPoint(x: size.width / 2, y: size.height / 2)
                 let radius = min(size.width, size.height) / 2 - 30
@@ -27,7 +27,7 @@ struct RadarView: View {
                     drawSweep(&ctx, c, radius, elapsed: context.date.timeIntervalSince(listeningSince))
                 }
                 for e in events.reversed() { drawEvent(&ctx, e, c, radius) }
-                for m in markers { drawMarker(&ctx, m, c, radius) }
+                for m in markers { drawMarker(&ctx, m, c, radius, date: context.date) }
                 ctx.fill(Path(ellipseIn: CGRect(x: c.x - 6, y: c.y - 6, width: 12, height: 12)), with: .color(.primary))
             }
         }
@@ -94,10 +94,10 @@ struct RadarView: View {
         drawArrow(&ctx, c, radius, angle: a, color: color, label: e.group, opacity: 1)
     }
 
-    private func drawMarker(_ ctx: inout GraphicsContext, _ m: MarkerDisplay, _ c: CGPoint, _ radius: CGFloat) {
+    private func drawMarker(_ ctx: inout GraphicsContext, _ m: MarkerDisplay, _ c: CGPoint, _ radius: CGFloat, date: Date) {
         let a = ForwardHeading.radarAngle(worldBearing: m.worldBearing, forward: forward)
         let color = m.score.map(Color.urgency) ?? Self.unclassifiedBlue
-        drawArrow(&ctx, c, radius, angle: a, color: color, label: m.label, opacity: m.opacity)
+        drawArrow(&ctx, c, radius, angle: a, color: color, label: m.label(at: date), opacity: m.opacity)
     }
 
     /// Dark outline under the colored shaft and head keeps light arrows visible on white.
@@ -124,9 +124,11 @@ struct RadarView: View {
         var parts = ["Radar."]
         if let ambientDB { parts.append("Ambient \(Int(ambientDB.rounded())) decibels, \(AmbientTracker.word(for: ambientDB)).") }
         parts += events.map { "\($0.group), \($0.band.label), \($0.directionPhrase(forward: forward))." }
-        let unclassified = markers.filter { $0.score == nil && $0.label == "Unclassified" }.count
+        let classifying = markers.filter { $0.kind == .classifying }.count
+        let unclassified = markers.filter { $0.kind == .unclassified }.count
+        if classifying > 0 { parts.append("\(classifying) new sound\(classifying == 1 ? "" : "s"), classifying.") }
         if unclassified > 0 { parts.append("\(unclassified) unclassified sound\(unclassified == 1 ? "" : "s").") }
-        if events.isEmpty && unclassified == 0 { parts.append(listeningSince == nil ? "Not listening." : "No sounds detected.") }
+        if events.isEmpty && markers.isEmpty { parts.append(listeningSince == nil ? "Not listening." : "No sounds detected.") }
         return parts.joined(separator: " ")
     }
 }
