@@ -12,7 +12,29 @@ enum ListeningStatus: Equatable {
     case error(String)
 }
 
-/// Probe-stage app model. Task 13 replaces it with the full model.
+/// What the UI needs for one tracked sound.
+struct EventDisplay: Identifiable, Equatable {
+    var id: String { group }
+    var group: String
+    var urgency: Urgency
+    var confidence: Double
+    /// World bearing of the belief peak; nil until the belief is concentrated enough (R ≥ 0.5).
+    var worldBearing: Double?
+    var concentration: Double
+    var belief: [Double]
+
+    static let minConcentration = 0.5
+
+    init(_ e: SoundEvent) {
+        group = e.group
+        urgency = e.urgency
+        confidence = e.confidence
+        concentration = e.belief.concentration
+        worldBearing = concentration >= Self.minConcentration ? e.belief.peakBearing : nil
+        belief = e.belief.probabilities
+    }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -20,10 +42,13 @@ final class AppModel {
 
     var status: ListeningStatus = .idle
     var isListening = false
+    var events: [EventDisplay] = []
+    var forwardBearing: Double = 0
     var classifierWarning: String?
     var probe = ProbeState()
     var calibration: FOAAxisCalibration {
         didSet {
+            pipeline?.calibration = calibration
             if let data = try? JSONEncoder().encode(calibration) {
                 UserDefaults.standard.set(data, forKey: Self.calibrationKey)
             }
@@ -31,6 +56,8 @@ final class AppModel {
     }
 
     @ObservationIgnored private let capture = FOACaptureSession()
+    @ObservationIgnored private let motion = MotionProvider()
+    @ObservationIgnored private let haptics = HapticsManager()
     @ObservationIgnored private var pipeline: AudioPipeline?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
@@ -42,14 +69,19 @@ final class AppModel {
             calibration = .initialGuess
         }
         do {
-            let pipeline = try AudioPipeline()
+            let motion = motion
+            let pipeline = try AudioPipeline(resources: .bundled()) { motion.deviceToWorld() }
+            pipeline.calibration = calibration
             pipeline.onWindow = { [weak self] summary in Task { @MainActor in self?.apply(summary) } }
+            pipeline.onTracker = { [weak self] output in Task { @MainActor in self?.apply(output) } }
+            pipeline.onError = { [weak self] message in Task { @MainActor in self?.classifierWarning = message } }
             capture.onChunk = { chunk in pipeline.ingest(chunk) }
             self.pipeline = pipeline
         } catch {
-            status = .error("Couldn't set up audio analysis: \(error.localizedDescription)")
+            status = .error("Couldn't load the sound tables: \(error.localizedDescription)")
         }
         capture.onFormat = { [weak self] format in Task { @MainActor in self?.probe.format = format } }
+        motion.onUpdate = { [weak self] bearing in self?.forwardBearing = bearing }
         observeSession()
     }
 
@@ -66,16 +98,23 @@ final class AppModel {
             return
         }
         pipeline?.reset()
+        motion.start()
         capture.start()
         isListening = true
-        status = capture.foaEnabled
-            ? .listening
-            : .directionUnavailable("this device can't capture spatial (FOA) audio.")
+        if !capture.foaEnabled {
+            status = .directionUnavailable("this device can't capture spatial (FOA) audio. Sounds are still identified.")
+        } else if !motion.isAvailable {
+            status = .error("Motion sensors unavailable: the radar won't stay anchored as you turn.")
+        } else {
+            status = .listening
+        }
     }
 
     func stop() {
         capture.stop()
+        motion.stop()
         isListening = false
+        events = []
         status = .idle
     }
 
@@ -99,6 +138,17 @@ final class AppModel {
 
     private func apply(_ summary: WindowSummary) {
         probe.ingest(summary, calibration: calibration, now: Date())
+    }
+
+    private func apply(_ output: TrackerOutput) {
+        guard isListening else { return }
+        events = output.events.map(EventDisplay.init)
+        for e in output.events where e.lastSeen == output.now {
+            haptics.alert(group: e.group, urgency: e.urgency, now: output.now)
+        }
+        for e in output.newEvents where e.urgency == .critical {
+            AccessibilityNotification.Announcement("\(e.group), critical").post()
+        }
     }
 
     private func observeSession() {
