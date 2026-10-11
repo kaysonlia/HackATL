@@ -54,7 +54,7 @@ final class AppModel {
     var notes: [String] { [classifierWarning, notificationsNote, liveActivityNote].compactMap { $0 } }
     var calibration: FOAAxisCalibration {
         didSet {
-            pipeline?.calibration = calibration
+            pipeline?.calibration = effectiveCalibration
             if let data = try? JSONEncoder().encode(calibration) {
                 UserDefaults.standard.set(data, forKey: Self.calibrationKey)
             }
@@ -83,7 +83,7 @@ final class AppModel {
             sourceLevels = resources.sourceLevels
             let motion = motion
             let pipeline = try AudioPipeline(resources: resources) { motion.deviceToWorld() }
-            pipeline.calibration = calibration
+            pipeline.calibration = effectiveCalibration
             pipeline.onWindow = { [weak self] summary in Task { @MainActor in self?.apply(summary) } }
             pipeline.onTracker = { [weak self] output in Task { @MainActor in self?.apply(output) } }
             pipeline.onError = { [weak self] message in
@@ -114,6 +114,19 @@ final class AppModel {
         motion.onUpdate = { [weak self] bearing in self?.forwardBearing = bearing }
         liveActivity.onProblem = { [weak self] message in self?.liveActivityNote = message }
         observeSession()
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        observers.append(NotificationCenter.default.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let o = UIDevice.current.orientation
+                if o.isPortrait || o.isLandscape { self.lastUpright = o }
+                if self.isListening {
+                    self.orientationCompensation.observe(Self.upright(o))
+                    self.pipeline?.calibration = self.effectiveCalibration
+                }
+                self.probe.logDetection("orientation → \(Self.name(o)) (last upright \(Self.name(self.lastUpright)))", inBackground: !self.isForeground, at: Date())
+            }
+        })
     }
 
     func start() async {
@@ -130,6 +143,10 @@ final class AppModel {
         }
         notificationsNote = await notifier.requestAuthorization()
             ? nil : "Notifications are off: urgent sounds will only show on the lock-screen bar."
+        probe.logDetection("start: \(capture.connectionNote), orientation \(Self.name(UIDevice.current.orientation)), last upright \(Self.name(lastUpright))",
+                           inBackground: !isForeground, at: Date())
+        orientationCompensation.reset()
+        pipeline?.calibration = effectiveCalibration
         pipeline?.reset()
         haptics.reset()
         notifier.reset()
@@ -189,7 +206,45 @@ final class AppModel {
 
     private func apply(_ summary: WindowSummary) {
         windowsSeen += 1
-        probe.ingest(summary, calibration: calibration, now: Date())
+        probe.ingest(summary, calibration: effectiveCalibration, now: Date())
+        // Debug: once a second, the raw (device-frame) bearing with the phone's orientation.
+        if windowsSeen % 2 == 0, summary.totalEnergy > 0 {
+            ProbeState.appendToDiagnosticsFile(String(format: "%@  dial %@ diff %.2f rmsW %.4f orient %@ lastUpright %@ corr %.0f",
+                Date().formatted(date: .omitted, time: .standard), probe.rawBearing.map { String(format: "%3.0f°", $0) } ?? "–",
+                summary.diffuseness, summary.channelRMS.first ?? 0, Self.name(UIDevice.current.orientation), Self.name(lastUpright),
+                orientationCompensation.correction))
+        }
+    }
+
+    @ObservationIgnored private var lastUpright: UIDeviceOrientation = .unknown
+    /// iOS rotates FOA capture to the phone's upright orientation (tracked from Start); undo it.
+    @ObservationIgnored private var orientationCompensation = FOAOrientationCompensation()
+
+    /// The fitted (portrait-frame) calibration turned to match the orientation iOS applies to FOA.
+    private var effectiveCalibration: FOAAxisCalibration {
+        calibration.rotated(clockwise: orientationCompensation.correction)
+    }
+
+    static func upright(_ o: UIDeviceOrientation) -> UprightOrientation? {
+        switch o {
+        case .portrait: .portrait
+        case .portraitUpsideDown: .portraitUpsideDown
+        case .landscapeLeft: .landscapeLeft
+        case .landscapeRight: .landscapeRight
+        default: nil
+        }
+    }
+
+    static func name(_ o: UIDeviceOrientation) -> String {
+        switch o {
+        case .portrait: "portrait"
+        case .portraitUpsideDown: "upsideDown"
+        case .landscapeLeft: "landscapeLeft"
+        case .landscapeRight: "landscapeRight"
+        case .faceUp: "faceUp"
+        case .faceDown: "faceDown"
+        default: "unknown"
+        }
     }
 
     private func apply(_ output: TrackerOutput) {

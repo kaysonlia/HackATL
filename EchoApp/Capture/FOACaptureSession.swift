@@ -23,6 +23,8 @@ final class FOACaptureSession: NSObject, AVCaptureAudioDataOutputSampleBufferDel
     private var configured = false
     /// False when the device can't capture FOA and the session fell back to mono.
     private(set) var foaEnabled = false
+    /// Debug: what the audio connection reports about rotation, for the probe diagnostics.
+    private(set) var connectionNote = ""
 
     /// Called on the buffer queue for every converted chunk.
     var onChunk: (@Sendable (FOAChunk) -> Void)?
@@ -52,6 +54,11 @@ final class FOACaptureSession: NSObject, AVCaptureAudioDataOutputSampleBufferDel
         output.setSampleBufferDelegate(self, queue: bufferQueue)
         foaEnabled = foa
         configured = true
+        // Debug: does the audio connection expose a rotation (FOA may follow device orientation)?
+        if let connection = output.connection(with: .audio) {
+            let angles = [0.0, 90, 180, 270].filter { connection.isVideoRotationAngleSupported(CGFloat($0)) }
+            connectionNote = "audio connection rotation supported: \(angles.isEmpty ? "none" : angles.map { "\(Int($0))" }.joined(separator: ","))"
+        }
     }
 
     func start() { sessionQueue.async { self.session.startRunning() } }
