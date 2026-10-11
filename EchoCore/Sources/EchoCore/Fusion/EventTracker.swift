@@ -81,5 +81,27 @@ public final class EventTracker {
         return created.map { byGroup[$0.group]! }
     }
 
+    /// 0.1 s direction nudges between classifier windows: lighter decay and evidence than a full window.
+    public var nudgeDecay = 0.05
+    public var nudgeConfidence = 0.35
+    public var nudgeAngle = 60.0
+    public var nudgeRecency = 1.0
+
+    /// Refines named sounds' directions from a 0.1 s block (10 updates/s): each sound that already shows a
+    /// direction and was detected within the last second takes the block peak nearest to it, if within ±60°,
+    /// so a clap or echo elsewhere can't drag it across the radar.
+    public func nudge(peaks: [DOAPeak], now: Double) {
+        guard !peaks.isEmpty else { return }
+        for group in Array(byGroup.keys) {
+            guard let e = byGroup[group], e.showsDirection, now - e.lastSeen <= nudgeRecency else { continue }
+            let current = e.belief.peakBearing
+            func gap(_ p: DOAPeak) -> Double { abs(Circular.difference(p.bearing, current)) }
+            guard let near = peaks.min(by: { gap($0) < gap($1) }), gap(near) <= nudgeAngle else { continue }
+            byGroup[group]!.belief.update(peaks: [DOAPeak(bearing: near.bearing, weight: 1)],
+                                          confidence: nudgeConfidence, decayRate: nudgeDecay)
+            byGroup[group]!.directionLatch.update(concentration: byGroup[group]!.belief.concentration)
+        }
+    }
+
     public func reset() { byGroup = [:] }
 }

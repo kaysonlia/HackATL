@@ -32,6 +32,18 @@ struct SettingsView: View {
                     Text("Off by default: they happen often and rarely need action. When on, they show as low urgency.")
                 }
                 Section {
+                    Toggle(isOn: $model.demoMode) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Demo mode")
+                            Text("Treat sounds as coming from a speaker.").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Demo")
+                } footer: {
+                    Text("Clips played on a laptop or phone are far quieter than the real thing, so they look distant and less urgent. Demo mode assumes speaker playback: a siren played loudly nearby shows red. Turn it off for real-world use.")
+                }
+                Section {
                     Text("Typing, keys, camera shutters, body sounds, music, TV and radio, crowds and laughter, appliance hum, insects, birds and other animals (except dogs) and aircraft overhead.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

@@ -76,7 +76,13 @@ final class AppModel {
     @ObservationIgnored private let notifier = UrgentNotifier()
     @ObservationIgnored private let liveActivity = LiveActivityController()
     @ObservationIgnored private var pipeline: AudioPipeline?
-    @ObservationIgnored private var sourceLevels = SourceLevels(levels: [:])
+    @ObservationIgnored private var baseSourceLevels = SourceLevels(levels: [:])
+    private static let demoModeKey = "demoMode"
+    /// Assume sounds come from a speaker (lower typical loudness) so played clips show real-world urgency.
+    var demoMode = UserDefaults.standard.bool(forKey: AppModel.demoModeKey) {
+        didSet { UserDefaults.standard.set(demoMode, forKey: Self.demoModeKey) }
+    }
+    private var sourceLevels: SourceLevels { demoMode ? baseSourceLevels.adjusted(by: -45) : baseSourceLevels }
     private static let optionalGroupsKey = "enabledOptionalGroups"
     /// Groups hidden by default that Settings can turn on.
     private(set) var optionalGroups: [String] = []
@@ -99,7 +105,7 @@ final class AppModel {
         }
         do {
             let resources = try ClassificationResources.bundled()
-            sourceLevels = resources.sourceLevels
+            baseSourceLevels = resources.sourceLevels
             optionalGroups = resources.visibility.optional
             let motion = motion
             let pipeline = try AudioPipeline(resources: resources) { motion.deviceToWorld() }
@@ -283,6 +289,7 @@ final class AppModel {
         guard isListening else { return }
         let displays = output.events.map { EventDisplay($0, sourceLevels: sourceLevels) }.sorted { $0.score > $1.score }
         events = displays
+        if output.directionOnly { return }
         classificationsSeen += 1
         for e in output.newEvents { probe.logDetection(e.group, inBackground: !isForeground, at: Date()) }
         if isForeground {

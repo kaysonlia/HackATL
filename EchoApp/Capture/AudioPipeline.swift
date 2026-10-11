@@ -25,6 +25,8 @@ struct TrackerOutput: Sendable {
     var events: [SoundEvent]
     var newEvents: [SoundEvent]
     var now: Double
+    /// A 0.1 s direction nudge between classifier windows: refresh arrows only (no alerts).
+    var directionOnly = false
 }
 
 /// Chunk → classifier + 1 s windows → DOA → joiner → EventTracker, all on one serial queue (spec §3).
@@ -150,6 +152,11 @@ final class AudioPipeline: @unchecked Sendable {
         let now = Double(block.startSample) / sampleRate
         let doa = estimator.estimate(estimator.intensity.analyze(block), windowStart: block.startSample,
                                      calibration: calibration, deviceToWorld: deviceToWorld())
+        // 10 updates/s for named sounds: a block clearly above the room nudges their directions.
+        if level >= ambient.level + 4, doa.diffuseness < 0.8, !doa.peaks.isEmpty, !tracker.events.isEmpty {
+            tracker.nudge(peaks: doa.peaks, now: now)
+            onTracker?(TrackerOutput(events: tracker.events, newEvents: [], now: now, directionOnly: true))
+        }
         if AmbientTracker.isSpike(level: level, ambient: ambient.level) {
             if doa.diffuseness < 0.9, let peak = doa.peaks.max(by: { $0.weight < $1.weight }) {
                 markerTracker.spike(bearing: peak.bearing, level: level, now: now)

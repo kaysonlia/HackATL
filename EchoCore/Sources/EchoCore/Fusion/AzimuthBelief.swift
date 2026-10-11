@@ -27,7 +27,12 @@ public struct AzimuthBelief: Sendable {
 
     /// Decays, then multiplies by ε + confidence·Σ wₖ·vonMises(θ − peakₖ, κ) and renormalizes.
     public mutating func update(peaks: [DOAPeak], confidence: Double) {
-        decayTowardUniform()
+        update(peaks: peaks, confidence: confidence, decayRate: decay)
+    }
+
+    /// As `update(peaks:confidence:)`, decaying at `decayRate` first (lighter for 0.1 s nudges).
+    public mutating func update(peaks: [DOAPeak], confidence: Double, decayRate: Double) {
+        decayTowardUniform(rate: decayRate)
         guard !peaks.isEmpty else { return }
         let c = min(1, max(0, confidence))
         for i in 0..<Self.binCount {

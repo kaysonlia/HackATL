@@ -20,4 +20,9 @@ public struct SourceLevels: Sendable {
     }
 
     public func level(for group: String) -> Double { levels[group] ?? defaultLevel }
+
+    /// Every typical level shifted by `dB` (Demo mode: −45 assumes sounds come from a speaker, not the real thing).
+    public func adjusted(by dB: Double) -> SourceLevels {
+        SourceLevels(levels: levels.mapValues { $0 + dB }, defaultLevel: defaultLevel + dB)
+    }
 }
