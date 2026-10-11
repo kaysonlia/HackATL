@@ -56,38 +56,63 @@ struct MarkerTests {
         #expect(first?.claimedBy == nil)
     }
 
-    @Test func unclaimedMarkerClassifiesForFiveSecondsThenStaysUnclassified() {
+    @Test func singleSoundClassifiesBrieflyThenGoes() {
         var m = MarkerTracker()
-        m.spike(bearing: 0, level: 70, now: 0)
+        m.spike(bearing: 0, level: 70, now: 0)  // a clap
         let marker = m.markers[0]
-        #expect(m.state(of: marker, now: 4.9) == .classifying)
-        #expect(m.state(of: marker, now: 5.1) == .unclassified)
-        #expect(m.opacity(of: marker, now: 6) == 1)
-        #expect(abs(m.opacity(of: marker, now: 7.5) - 0.5) < 1e-9)  // fades over the last second
-        m.expire(now: 7.9)
-        #expect(m.markers.count == 1)
-        m.expire(now: 8.1)  // shown as Unclassified for 3 s after the 5 s of classifying
-        #expect(m.markers.isEmpty)
-    }
-
-    @Test func ongoingSpikesKeepMarkerAlive() {
-        var m = MarkerTracker()
-        m.spike(bearing: 0, level: 70, now: 0)
-        m.spike(bearing: 5, level: 70, now: 6)
-        m.expire(now: 8.5)
-        #expect(m.markers.count == 1)
-        #expect(m.state(of: m.markers[0], now: 8.5) == .unclassified)
-    }
-
-    @Test func claimedMarkerFadesSoonAfterLastSpike() {
-        var m = MarkerTracker()
-        m.spike(bearing: 0, level: 70, now: 0)
-        m.claim(group: "Dog", bearing: nil, windowStart: 0)
-        #expect(m.state(of: m.markers[0], now: 1) == .claimed("Dog"))
+        #expect(m.state(of: marker, now: 1.4) == .classifying)
+        #expect(m.state(of: marker, now: 1.6) == .unclassified)
+        #expect(abs(m.opacity(of: marker, now: 2.0) - 0.5) < 1e-9)
         m.expire(now: 2.4)
         #expect(m.markers.count == 1)
         m.expire(now: 2.6)
         #expect(m.markers.isEmpty)
+    }
+
+    @Test func sustainedUnknownSoundClassifiesUpToFiveSeconds() {
+        var m = MarkerTracker()
+        for i in 0...14 { m.spike(bearing: 0, level: 70, now: Double(i) * 0.5) }  // 0…7 s
+        #expect(m.state(of: m.markers[0], now: 4.9) == .classifying)
+        #expect(m.state(of: m.markers[0], now: 6) == .unclassified)
+        m.expire(now: 7.9)
+        #expect(m.markers.count == 1)
+        m.expire(now: 8.1)  // 1 s after it stopped
+        #expect(m.markers.isEmpty)
+    }
+
+    @Test func claimedMarkerGoesOneSecondAfterLastSpike() {
+        var m = MarkerTracker()
+        m.spike(bearing: 0, level: 70, now: 0)
+        m.claim(group: "Dog", bearing: nil, windowStart: 0)
+        #expect(m.state(of: m.markers[0], now: 0.5) == .claimed("Dog"))
+        m.expire(now: 0.9)
+        #expect(m.markers.count == 1)
+        m.expire(now: 1.1)
+        #expect(m.markers.isEmpty)
+    }
+
+    @Test func spikesNearANamedArrowDontSpawnMarkers() {
+        var m = MarkerTracker()
+        m.spike(bearing: 120, level: 70, now: 0, near: [100])  // the dog we already show
+        #expect(m.markers.isEmpty)
+        m.spike(bearing: 200, level: 70, now: 0, near: [100])
+        #expect(m.markers.count == 1)
+    }
+
+    @Test func namedArrowsAbsorbNearbyMarkers() {
+        var m = MarkerTracker()
+        m.spike(bearing: 90, level: 70, now: 0)
+        m.spike(bearing: 250, level: 70, now: 0)
+        m.absorb(near: [100])
+        #expect(m.markers.count == 1)
+        #expect(abs(Circular.difference(m.markers[0].bearing, 250)) < 1e-9)
+    }
+
+    @Test func nearbySpikesMergeWithinFortyFiveDegrees() {
+        var m = MarkerTracker()
+        m.spike(bearing: 0, level: 70, now: 0)
+        m.spike(bearing: 40, level: 70, now: 0.2)
+        #expect(m.markers.count == 1)
     }
 
     @Test func classificationClaimsMatchingMarker() {

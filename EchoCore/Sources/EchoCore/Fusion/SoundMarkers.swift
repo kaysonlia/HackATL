@@ -28,14 +28,18 @@ public struct MarkerSnapshot: Sendable, Equatable {
 
 /// Spikes become markers at once; a later classification of the same sound (close in time and
 /// direction) claims the marker so the arrow turns into that sound. An unclaimed marker reads
-/// "Classifying…" for 5 s, then "Unclassified" for 3 s more (counted from its last spike if the
-/// sound continues), then disappears. A claimed marker fades 2.5 s after its last spike, by which
-/// time the sound's own arrow has taken over.
+/// "Classifying…" while the sound continues plus 1.5 s for the classifier (at most 5 s), then
+/// "Unclassified" for 1 s after the sound stops. A claimed marker goes 1 s after its last spike, by
+/// which time the sound's own arrow has taken over. Spikes near a named arrow belong to it.
 public struct MarkerTracker: Sendable {
-    public var mergeAngle = 30.0
-    public var fadeAfter = 2.5
+    public var mergeAngle = 45.0
+    /// Spikes this close to a named arrow are that sound, not a new one.
+    public var suppressAngle = 40.0
     public var classifyingFor = 5.0
-    public var unclassifiedHold = 3.0
+    /// Time after the last spike for the classifier to name the sound.
+    public var classifyAfterLast = 1.5
+    public var unclassifiedHold = 1.0
+    public var claimedHold = 1.0
     public var claimAngle = 45.0
     /// A classification window [start, start + 1 s] claims spikes from 0.5 s before it to its end.
     public var claimLead = 0.5
@@ -46,7 +50,9 @@ public struct MarkerTracker: Sendable {
 
     public init() {}
 
-    public mutating func spike(bearing: Double, level: Double, now: Double) {
+    /// `near`: bearings of named arrows currently shown; a spike close to one is that sound.
+    public mutating func spike(bearing: Double, level: Double, now: Double, near named: [Double] = []) {
+        if named.contains(where: { abs(Circular.difference($0, bearing)) <= suppressAngle }) { return }
         let near = markers.indices.filter { abs(Circular.difference(markers[$0].bearing, bearing)) <= mergeAngle }
         if let i = near.min(by: { abs(Circular.difference(markers[$0].bearing, bearing)) < abs(Circular.difference(markers[$1].bearing, bearing)) }) {
             markers[i].bearing = bearing
@@ -58,14 +64,24 @@ public struct MarkerTracker: Sendable {
         }
     }
 
+    func classifyingUntil(_ m: SoundMarker) -> Double {
+        min(m.firstSpike + classifyingFor, m.lastSpike + classifyAfterLast)
+    }
+
     public func state(of m: SoundMarker, now: Double) -> MarkerState {
         if let group = m.claimedBy { return .claimed(group) }
-        return now - m.firstSpike < classifyingFor ? .classifying : .unclassified
+        return now < classifyingUntil(m) ? .classifying : .unclassified
     }
 
     /// When the marker disappears.
     public func endTime(of m: SoundMarker) -> Double {
-        m.claimedBy != nil ? m.lastSpike + fadeAfter : max(m.lastSpike, m.firstSpike + classifyingFor) + unclassifiedHold
+        m.claimedBy != nil ? m.lastSpike + claimedHold : max(classifyingUntil(m), m.lastSpike) + unclassifiedHold
+    }
+
+    /// Named arrows replace markers near them.
+    public mutating func absorb(near named: [Double]) {
+        let angle = suppressAngle
+        markers.removeAll { m in named.contains { abs(Circular.difference($0, m.bearing)) <= angle } }
     }
 
     public func opacity(of m: SoundMarker, now: Double) -> Double {

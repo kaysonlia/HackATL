@@ -28,7 +28,7 @@ struct FastDirectionTests {
     @Test func staleOrDirectionlessSoundsArentNudged() {
         let t = trackerWithDog(at: 90)
         let before = t.events[0].belief.probabilities
-        t.nudge(peaks: [DOAPeak(bearing: 110, weight: 1)], now: 3.0)  // last detected at 1.5 s: stale
+        t.nudge(peaks: [DOAPeak(bearing: 110, weight: 1)], now: 3.6)  // last heard at 2.5 s (window end): stale
         #expect(t.events[0].belief.probabilities == before)
         let fresh = EventTracker(urgencyMap: urgency)
         fresh.ingest(active: ["Dog": 0.9], doa: nil, now: 0)  // no direction yet
@@ -43,5 +43,20 @@ struct FastDirectionTests {
         #expect(demo.level(for: "Siren") == 75)
         #expect(demo.level(for: "Dog") == 45)
         #expect(demo.level(for: "Unknown") == 25)
+    }
+}
+
+/// Named arrows hide 1 s after sound stops coming from their direction.
+struct ArrowHoldTests {
+    @Test func arrowHidesWhenItsDirectionGoesQuiet() {
+        let t = EventTracker(urgencyMap: UrgencyMap(tiers: ["Dog": .medium]))
+        let doa = DOAFrame(windowStart: 0, peaks: [DOAPeak(bearing: 90, weight: 1)], diffuseness: 0.3, histogram: [])
+        // Windows start every 0.5 s; the last (1.5–2.5 s) means it was heard until 2.5 s.
+        for i in 0..<4 { t.ingest(active: ["Dog": 0.9], doa: doa, now: Double(i) * 0.5) }
+        #expect(t.events[0].arrowVisible(now: 3.4))
+        #expect(!t.events[0].arrowVisible(now: 3.6))
+        t.nudge(peaks: [DOAPeak(bearing: 95, weight: 1)], now: 3.0)  // a bark from there again (block 3.0–3.1 s)
+        #expect(t.events[0].arrowVisible(now: 4.0))
+        #expect(!t.events[0].arrowVisible(now: 4.2))
     }
 }

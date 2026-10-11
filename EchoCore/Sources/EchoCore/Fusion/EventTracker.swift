@@ -14,6 +14,17 @@ public struct SoundEvent: Sendable, Identifiable {
     public var directionLatch = DirectionLatch()
     /// Windows in which this group was active.
     public var hits = 1
+    /// Capture time sound was last heard from this event: the end of its last classifier window, or a
+    /// 0.1 s block that nudged its direction.
+    public var lastHeard: Double = 0
+
+    /// Seconds an arrow stays up after sound stops coming from its direction.
+    public static let arrowHold = 1.0
+
+    /// Draw the arrow: the direction is known and sound came from there within the last second.
+    public func arrowVisible(now: Double) -> Bool {
+        showsDirection && now - lastHeard <= Self.arrowHold
+    }
 
     /// Whether the belief is concentrated enough to draw an arrow (with hysteresis).
     public var showsDirection: Bool { directionLatch.isShown }
@@ -60,12 +71,14 @@ public final class EventTracker {
             if var e = byGroup[group] {
                 e.confidence = emaAlpha * score + (1 - emaAlpha) * e.confidence
                 e.lastSeen = now
+                e.lastHeard = max(e.lastHeard, now + 1)
                 e.hits += 1
                 if let levelDB { e.levelDB = e.levelDB.map { emaAlpha * levelDB + (1 - emaAlpha) * $0 } ?? levelDB }
                 byGroup[group] = e
             } else {
-                let e = SoundEvent(group: group, urgency: urgencyMap.urgency(for: group), confidence: score,
+                var e = SoundEvent(group: group, urgency: urgencyMap.urgency(for: group), confidence: score,
                                    belief: AzimuthBelief(), firstSeen: now, lastSeen: now, levelDB: levelDB)
+                e.lastHeard = now + 1
                 byGroup[group] = e
                 created.append(e)
             }
@@ -88,17 +101,19 @@ public final class EventTracker {
     public var nudgeRecency = 1.0
 
     /// Refines named sounds' directions from a 0.1 s block (10 updates/s): each sound that already shows a
-    /// direction and was detected within the last second takes the block peak nearest to it, if within ±60°,
+    /// direction and was heard within the last second takes the block peak nearest to it, if within ±60°,
     /// so a clap or echo elsewhere can't drag it across the radar.
     public func nudge(peaks: [DOAPeak], now: Double) {
         guard !peaks.isEmpty else { return }
         for group in Array(byGroup.keys) {
-            guard let e = byGroup[group], e.showsDirection, now - e.lastSeen <= nudgeRecency else { continue }
+            // Recency from lastHeard (window end / last nudge): window starts run ~1.1–1.6 s behind live blocks.
+            guard let e = byGroup[group], e.showsDirection, now - e.lastHeard <= nudgeRecency else { continue }
             let current = e.belief.peakBearing
             func gap(_ p: DOAPeak) -> Double { abs(Circular.difference(p.bearing, current)) }
             guard let near = peaks.min(by: { gap($0) < gap($1) }), gap(near) <= nudgeAngle else { continue }
             byGroup[group]!.belief.update(peaks: [DOAPeak(bearing: near.bearing, weight: 1)],
                                           confidence: nudgeConfidence, decayRate: nudgeDecay)
+            byGroup[group]!.lastHeard = max(e.lastHeard, now + 0.1)
             byGroup[group]!.directionLatch.update(concentration: byGroup[group]!.belief.concentration)
         }
     }

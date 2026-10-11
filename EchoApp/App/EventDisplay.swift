@@ -8,7 +8,7 @@ struct EventDisplay: Identifiable, Equatable {
     var urgency: Urgency
     var confidence: Double
     /// World bearing of the belief peak; nil while the tracker's direction latch is off
-    /// (shown at R ≥ 0.5, hidden below 0.3).
+    /// (shown at R ≥ 0.5, hidden below 0.3) or after 1 s without sound from that direction.
     var worldBearing: Double?
     /// Belief peak even when diffuse, for the halo.
     var peakBearing: Double
@@ -22,13 +22,14 @@ struct EventDisplay: Identifiable, Equatable {
     /// Windows in which the classifier detected this group.
     var hits: Int
 
-    init(_ e: SoundEvent, sourceLevels: SourceLevels) {
+    /// `now`: current capture time; the arrow shows only while sound still comes from its direction.
+    init(_ e: SoundEvent, sourceLevels: SourceLevels, now: Double) {
         group = e.group
         urgency = e.urgency
         confidence = e.confidence
         concentration = e.belief.concentration
         peakBearing = e.belief.peakBearing
-        worldBearing = e.showsDirection ? peakBearing : nil
+        worldBearing = e.arrowVisible(now: now) ? peakBearing : nil
         belief = e.belief.probabilities
         levelDB = e.levelDB
         let source = sourceLevels.level(for: e.group)

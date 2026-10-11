@@ -26,7 +26,7 @@ struct RadarView: View {
                 if let listeningSince {
                     drawSweep(&ctx, c, radius, elapsed: context.date.timeIntervalSince(listeningSince))
                 }
-                for e in events.reversed() { drawEvent(&ctx, e, c, radius) }
+                for e in onePerSpot().reversed() { drawEvent(&ctx, e, c, radius) }
                 for m in markers { drawMarker(&ctx, m, c, radius, date: context.date) }
                 ctx.fill(Path(ellipseIn: CGRect(x: c.x - 6, y: c.y - 6, width: 12, height: 12)), with: .color(.primary))
             }
@@ -34,6 +34,18 @@ struct RadarView: View {
         .animation(.easeOut(duration: 0.4), value: ambientDB)
         .accessibilityElement()
         .accessibilityLabel(accessibilitySummary)
+    }
+
+    /// Named sounds pointing within 20° of a more urgent one (e.g. Siren and Vehicle from one clip) aren't
+    /// drawn; `events` is sorted most urgent first, and the list still shows them all.
+    private func onePerSpot() -> [EventDisplay] {
+        var drawn: [Double] = []
+        return events.filter { e in
+            guard let a = e.radarAngle(forward: forward) else { return true }
+            if drawn.contains(where: { abs(Circular.difference($0, a)) < 20 }) { return false }
+            drawn.append(a)
+            return true
+        }
     }
 
     private var isSweeping: Bool {

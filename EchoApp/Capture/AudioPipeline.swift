@@ -86,7 +86,8 @@ final class AudioPipeline: @unchecked Sendable {
         // Loaded up front, in the foreground, so switching on lock is instant.
         yamnetModel = try? YAMNetClassifier.loadModel()
         estimator = try DOAEstimator()
-        tracker = EventTracker(urgencyMap: resources.urgency)
+        // Named sounds leave the list 2 s after their last detection (arrows hide sooner: 1 s of quiet).
+        tracker = EventTracker(urgencyMap: resources.urgency, evictAfter: 2)
         activeThresholds = resources.thresholds
     }
 
@@ -180,9 +181,12 @@ final class AudioPipeline: @unchecked Sendable {
             onTracker?(TrackerOutput(events: tracker.events, newEvents: [], now: now, directionOnly: true))
         }
         let peak = doa.diffuseness < 0.9 ? doa.peaks.max(by: { $0.weight < $1.weight }) : nil
+        // Spikes near a named arrow are that sound: no new arrow, and leftovers there are absorbed.
+        let named = tracker.events.filter { $0.isConfirmed && $0.arrowVisible(now: now) }.map(\.belief.peakBearing)
         if let spike = spikeGate.feed(level: level, ambient: ambient.level, bearing: peak?.bearing, now: now) {
-            markerTracker.spike(bearing: spike.bearing, level: spike.level, now: now)
+            markerTracker.spike(bearing: spike.bearing, level: spike.level, now: now, near: named)
         }
+        markerTracker.absorb(near: named)
         if !AmbientTracker.isSpike(level: level, ambient: ambient.level) {
             if !doa.peaks.isEmpty { ambientDirection.add(histogram: doa.histogram) }
         }

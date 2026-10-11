@@ -97,6 +97,9 @@ final class AppModel {
         }
     }
     @ObservationIgnored private var announced: Set<String> = []
+    /// Latest tracker events and live capture time (seconds), for 10 Hz display refreshes.
+    @ObservationIgnored private var trackedEvents: [SoundEvent] = []
+    @ObservationIgnored private var captureNow: Double = 0
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     init() {
@@ -185,6 +188,8 @@ final class AppModel {
         orientationCompensation.reset()
         pipeline?.calibration = effectiveCalibration
         pipeline?.reset()
+        trackedEvents = []
+        captureNow = 0
         haptics.reset()
         notifier.reset()
         announced = []
@@ -249,8 +254,17 @@ final class AppModel {
         }
     }
 
+    /// Low/Medium sounds show after two detections; Critical/High at once. Most urgent first.
+    private func makeDisplays(now: Double) -> [EventDisplay] {
+        trackedEvents.filter(\.isConfirmed).map { EventDisplay($0, sourceLevels: sourceLevels, now: now) }
+            .sorted { $0.score > $1.score }
+    }
+
     private func apply(_ scene: SceneUpdate) {
         guard isListening else { return }
+        // 10 Hz: re-derive arrows with the live capture time so they hide 1 s after their sound stops.
+        captureNow = scene.now
+        events = makeDisplays(now: captureNow)
         ambientDB = scene.ambientDB
         ambientProfile = scene.ambientProfile
         markers = MarkerDisplay.from(scene.markers, events: events)
@@ -304,9 +318,8 @@ final class AppModel {
 
     private func apply(_ output: TrackerOutput) {
         guard isListening else { return }
-        // Low/Medium sounds show after two detections; Critical/High at once.
-        let displays = output.events.filter(\.isConfirmed).map { EventDisplay($0, sourceLevels: sourceLevels) }
-            .sorted { $0.score > $1.score }
+        trackedEvents = output.events
+        let displays = makeDisplays(now: max(captureNow, output.now + 1))
         events = displays
         if output.directionOnly { return }
         classificationsSeen += 1
