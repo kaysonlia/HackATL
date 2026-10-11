@@ -17,9 +17,12 @@ public struct AzimuthBelief: Sendable {
     public static func binCenter(_ i: Int) -> Double { (Double(i) + 0.5) * binWidth }
 
     /// Blends toward uniform: p ← (1 − λ)·p + λ·uniform.
-    public mutating func decayTowardUniform() {
+    public mutating func decayTowardUniform() { decayTowardUniform(rate: decay) }
+
+    /// Blends toward uniform at `rate` instead of `decay` (used between detections).
+    public mutating func decayTowardUniform(rate: Double) {
         let u = 1 / Double(Self.binCount)
-        probabilities = probabilities.map { (1 - decay) * $0 + decay * u }
+        probabilities = probabilities.map { (1 - rate) * $0 + rate * u }
     }
 
     /// Decays, then multiplies by ε + confidence·Σ wₖ·vonMises(θ − peakₖ, κ) and renormalizes.

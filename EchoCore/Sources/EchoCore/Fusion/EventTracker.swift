@@ -11,6 +11,10 @@ public struct SoundEvent: Sendable, Identifiable {
     public var lastSeen: Double
     /// Smoothed omni level (approximate dB SPL) over the windows where this group was active; nil until measured.
     public var levelDB: Double?
+    public var directionLatch = DirectionLatch()
+
+    /// Whether the belief is concentrated enough to draw an arrow (with hysteresis).
+    public var showsDirection: Bool { directionLatch.isShown }
 }
 
 /// Rolling set of active sound events with per-label direction beliefs (spec §3.4).
@@ -21,15 +25,19 @@ public final class EventTracker {
     public let diffusenessCutoff: Double
     /// Groups that never become events (urgency spec §2.5).
     public let ignoredGroups: Set<String>
+    /// Belief decay per window for events with no new direction evidence. Slower than the 0.15 applied
+    /// with each update, so intermittent sounds (barks) keep their direction between detections.
+    public let idleDecay: Double
     private var byGroup: [String: SoundEvent] = [:]
 
     public init(urgencyMap: UrgencyMap, evictAfter: Double = 3, emaAlpha: Double = 0.5, diffusenessCutoff: Double = 0.8,
-                ignoredGroups: Set<String> = ["Silence"]) {
+                ignoredGroups: Set<String> = ["Silence"], idleDecay: Double = 0.04) {
         self.urgencyMap = urgencyMap
         self.evictAfter = evictAfter
         self.emaAlpha = emaAlpha
         self.diffusenessCutoff = diffusenessCutoff
         self.ignoredGroups = ignoredGroups
+        self.idleDecay = idleDecay
     }
 
     /// Events sorted by urgency (highest first), then confidence.
@@ -63,8 +71,9 @@ public final class EventTracker {
             if let peaks = usable, let score = active[group] {
                 byGroup[group]!.belief.update(peaks: peaks, confidence: score)
             } else {
-                byGroup[group]!.belief.decayTowardUniform()
+                byGroup[group]!.belief.decayTowardUniform(rate: idleDecay)
             }
+            byGroup[group]!.directionLatch.update(concentration: byGroup[group]!.belief.concentration)
         }
         return created.map { byGroup[$0.group]! }
     }
