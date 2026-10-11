@@ -2,7 +2,7 @@
 # and recompute per-group thresholds from the 2026-10-10 classifier spike (ESC-50) scores.
 import sys, json, csv, collections, numpy as np
 SP, OUT = sys.argv[1], sys.argv[2]
-R = '/Users/jasonlai150/Documents/GitHub/HackATL/EchoCore/Sources/EchoCore/Resources'
+R = '/Users/jasonlai150/Documents/GitHub/HackATL/SoundSightCore/Sources/SoundSightCore/Resources'
 TIERS = {
     'CRITICAL': ['Siren', 'Smoke Alarm', 'Gunshot/Explosion'],
     'HIGH': ['Traffic Warning', 'Screaming/Shouting', 'Crash/Glass Breaking'],

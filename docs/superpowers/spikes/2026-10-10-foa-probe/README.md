@@ -4,7 +4,7 @@
 
 **Setup:** iPhone 16 Pro Max on iOS 26.6.2, lying flat with the screen up and the top edge pointing at 0°. Recordings were made at 8 positions (0°, 45° … 315°) in the SoundSight probe screen. The data is in `flat-8dir.csv`: 340 accepted windows of 1024 samples each, with diffuse windows rejected.
 
-**Analysis:** The CSV was refit offline with `CalibrationFitter.fit`, which is the same EchoCore code the probe runs, trying all 24 proper signed axis permutations.
+**Analysis:** The CSV was refit offline with `CalibrationFitter.fit`, which is the same SoundSightCore code the probe runs, trying all 24 proper signed axis permutations.
 
 ## Result: PASS
 

@@ -5,9 +5,9 @@
 **Goal:** Replace the four fixed urgency tiers with a continuous urgency score shown as a green → yellow → red gradient. The score combines classification, loudness and approximate distance. Put the most urgent sound's class, volume and distance under the radar, keep listening in the background, and show a Live Activity bar on the lock screen and in the Dynamic Island. Send one urgent notification that never stacks.
 
 **Architecture:**
-- **EchoCore (pure, tested):** the score, bands and gradient hue, the per-group source levels, the tracker's level smoothing, score-based haptics, the notification and Live Activity rate limits, and the radar sweep and halo rules. All of these are tested with `swift test`.
+- **SoundSightCore (pure, tested):** the score, bands and gradient hue, the per-group source levels, the tracker's level smoothing, score-based haptics, the notification and Live Activity rate limits, and the radar sweep and halo rules. All of these are tested with `swift test`.
 - **App (thin wiring):** background audio, the SwiftUI focus card and radar changes, a `UserNotifications` wrapper and an `ActivityKit` controller.
-- **Widget extension (`EchoLiveActivity`):** renders the bar. It shares `EchoShared/`, which holds the attributes and gradient color, with the app.
+- **Widget extension (`SoundSightLiveActivity`):** renders the bar. It shares `SoundSightShared/`, which holds the attributes and gradient color, with the app.
 
 **Tech Stack:** Swift 6.2 / Xcode 26.2, iOS 26.0, SwiftUI + Observation, AVFoundation, ActivityKit + WidgetKit, UserNotifications, Core Haptics, Swift Testing, XcodeGen.
 
@@ -30,7 +30,7 @@
 
 ## Global Constraints
 
-- **Build settings:** iOS deployment target **26.0**; iPhone only; portrait; Swift language mode **6**. `EchoCore` must keep building and testing on **macOS 15**, so ActivityKit, UIKit and SwiftUI code never goes into `EchoCore`.
+- **Build settings:** iOS deployment target **26.0**; iPhone only; portrait; Swift language mode **6**. `SoundSightCore` must keep building and testing on **macOS 15**, so ActivityKit, UIKit and SwiftUI code never goes into `SoundSightCore`.
 - **Dependencies:** no third-party dependencies.
 - **Score:**
 
@@ -53,7 +53,7 @@
   | u ≥ 0.3 | single |
 
 - **Notification:**
-  - Identifier **`echo.urgent`** on every request.
+  - Identifier **`soundsight.urgent`** on every request.
   - Only when **not in the foreground** and **u ≥ 0.75**.
   - At most one every **10 s**; the same group only after **30 s**, unless its score rose by **≥ 0.15**.
   - Interruption level `.active`, default sound.
@@ -66,7 +66,7 @@
   - Sweep: opacity 1 for the first **2 s** after Start, then linear to 0 at **3 s**.
   - Halo: only bins within **±15°** of the belief peak with p ≥ **50%** of the strongest bin.
 - **Silence:** the group `Silence` never becomes an event.
-- **Bundle IDs and signing:** bundle IDs are `com.hackatl.soundsight` and `com.hackatl.soundsight.liveactivity`. Both targets sign with the git-ignored `EchoApp/Config/Signing.xcconfig`; never commit a team ID.
+- **Bundle IDs and signing:** bundle IDs are `com.hackatl.soundsight` and `com.hackatl.soundsight.liveactivity`. Both targets sign with the git-ignored `SoundSightApp/Config/Signing.xcconfig`; never commit a team ID.
 - **Commits:** every commit message ends with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - **Branch:** `ios-foa-design`.
 
@@ -82,10 +82,10 @@
 
 ```
 HackATL/
-├── project.yml                                   + UIBackgroundModes (T1), EchoShared (T5), extension target (T7)
-├── .gitignore                                    + EchoLiveActivity/Info.plist (T7)
-├── EchoCore/
-│   ├── Sources/EchoCore/
+├── project.yml                                   + UIBackgroundModes (T1), SoundSightShared (T5), extension target (T7)
+├── .gitignore                                    + SoundSightLiveActivity/Info.plist (T7)
+├── SoundSightCore/
+│   ├── Sources/SoundSightCore/
 │   │   ├── Urgency/UrgencyScore.swift            score, band, hue, distance text (T2)
 │   │   ├── Urgency/SourceLevels.swift            typical level per group (T2)
 │   │   ├── Resources/source_levels.json          (T2)
@@ -97,13 +97,13 @@ HackATL/
 │   │   ├── Display/LiveActivityThrottle.swift    bar update rate limit (T4)
 │   │   ├── Alerts/DirectionPhrase.swift          + short sector words (T4)
 │   │   └── Alerts/HapticGate.swift               patterns by score (T5)
-│   └── Tests/EchoCoreTests/
+│   └── Tests/SoundSightCoreTests/
 │       ├── UrgencyScoreTests.swift (T2)  EventTrackerLevelTests.swift (T3)
 │       ├── NotificationPolicyTests.swift (T3)  DisplayTests.swift (T4)  AlertTests.swift (T5)
-├── EchoShared/                                   compiled into app and extension
+├── SoundSightShared/                                   compiled into app and extension
 │   ├── UrgencyColor.swift                        Color.urgency(_:), UrgencyBar (T5)
-│   └── EchoActivityAttributes.swift              Live Activity attributes (T7)
-├── EchoApp/
+│   └── SoundSightActivityAttributes.swift              Live Activity attributes (T7)
+├── SoundSightApp/
 │   ├── App/SoundSightApp.swift                       scene phase → isForeground (T1)
 │   ├── App/AppModel.swift                        (T1, T5, T6, T7)
 │   ├── App/EventDisplay.swift                    score, level, distance, phrases (T5)
@@ -114,7 +114,7 @@ HackATL/
 │   ├── Alerts/UrgentNotifier.swift               (T6)
 │   ├── Alerts/LiveActivityController.swift       (T7)
 │   └── UI/RadarView.swift, FocusCard.swift, EventListView.swift, MainView.swift, StatusBanner.swift (T5)
-└── EchoLiveActivity/EchoLiveActivityWidget.swift lock-screen banner + Dynamic Island (T7)
+└── SoundSightLiveActivity/SoundSightLiveActivityWidget.swift lock-screen banner + Dynamic Island (T7)
 ```
 
 ---
@@ -122,7 +122,7 @@ HackATL/
 ### Task 1: Background capture, gated on the device
 
 **Files:**
-- Modify (replace): `project.yml`, `EchoApp/Capture/FOACaptureSession.swift`, `EchoApp/Probe/ProbeState.swift`, `EchoApp/Probe/ProbeView.swift`, `EchoApp/App/AppModel.swift`, `EchoApp/App/SoundSightApp.swift`
+- Modify (replace): `project.yml`, `SoundSightApp/Capture/FOACaptureSession.swift`, `SoundSightApp/Probe/ProbeState.swift`, `SoundSightApp/Probe/ProbeView.swift`, `SoundSightApp/App/AppModel.swift`, `SoundSightApp/App/SoundSightApp.swift`
 - Create: `docs/superpowers/spikes/2026-10-10-background-gate/README.md`
 
 **Interfaces:**
@@ -146,8 +146,8 @@ options:
     iOS: "26.0"
   createIntermediateGroups: true
 packages:
-  EchoCore:
-    path: EchoCore
+  SoundSightCore:
+    path: SoundSightCore
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -157,17 +157,17 @@ targets:
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: EchoApp
+      - path: SoundSightApp
         excludes:
           - "Config/**"
           - "Info.plist"
     dependencies:
-      - package: EchoCore
+      - package: SoundSightCore
     configFiles:
-      Debug: EchoApp/Config/App.xcconfig
-      Release: EchoApp/Config/App.xcconfig
+      Debug: SoundSightApp/Config/App.xcconfig
+      Release: SoundSightApp/Config/App.xcconfig
     info:
-      path: EchoApp/Info.plist
+      path: SoundSightApp/Info.plist
       properties:
         CFBundleDisplayName: SoundSight
         UILaunchScreen: {}
@@ -182,7 +182,7 @@ targets:
     scheme: {}
 ```
 
-`EchoApp/Capture/FOACaptureSession.swift` (replace):
+`SoundSightApp/Capture/FOACaptureSession.swift` (replace):
 
 ```swift
 import AVFoundation
@@ -205,8 +205,8 @@ enum CaptureError: LocalizedError {
 final class FOACaptureSession: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
     private let output = AVCaptureAudioDataOutput()
-    private let sessionQueue = DispatchQueue(label: "echo.capture.session")
-    private let bufferQueue = DispatchQueue(label: "echo.capture.buffers")
+    private let sessionQueue = DispatchQueue(label: "soundsight.capture.session")
+    private let bufferQueue = DispatchQueue(label: "soundsight.capture.buffers")
     private var configured = false
     /// False when the device can't capture FOA and the session fell back to mono.
     private(set) var foaEnabled = false
@@ -260,10 +260,10 @@ final class FOACaptureSession: NSObject, AVCaptureAudioDataOutputSampleBufferDel
 }
 ```
 
-`EchoApp/Probe/ProbeState.swift` (replace):
+`SoundSightApp/Probe/ProbeState.swift` (replace):
 
 ```swift
-import EchoCore
+import SoundSightCore
 import Foundation
 import simd
 
@@ -330,10 +330,10 @@ struct ProbeState {
 }
 ```
 
-`EchoApp/Probe/ProbeView.swift` (replace):
+`SoundSightApp/Probe/ProbeView.swift` (replace):
 
 ```swift
-import EchoCore
+import SoundSightCore
 import SwiftUI
 
 /// Debug screen for the step 1 FOA gate (spec §6).
@@ -424,11 +424,11 @@ struct ProbeDial: View {
 }
 ```
 
-`EchoApp/App/AppModel.swift` (replace):
+`SoundSightApp/App/AppModel.swift` (replace):
 
 ```swift
 import AVFoundation
-import EchoCore
+import SoundSightCore
 import Observation
 import SwiftUI
 
@@ -602,7 +602,7 @@ final class AppModel {
 }
 ```
 
-`EchoApp/App/SoundSightApp.swift` (replace):
+`SoundSightApp/App/SoundSightApp.swift` (replace):
 
 ```swift
 import SwiftUI
@@ -621,7 +621,7 @@ struct SoundSightApp: App {
 
 - [ ] **Step 2: Build and run the core tests**
 
-Run: `xcodegen generate && xcodebuild -project SoundSight.xcodeproj -scheme SoundSight -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build -quiet && swift test --package-path EchoCore`
+Run: `xcodegen generate && xcodebuild -project SoundSight.xcodeproj -scheme SoundSight -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build -quiet && swift test --package-path SoundSightCore`
 Expected: no `error:` or warnings; `Test run with 65 tests in 13 suites passed`.
 
 - [ ] **Step 3: GATE — background listening on the iPhone (human)**
@@ -651,7 +651,7 @@ Write `docs/superpowers/spikes/2026-10-10-background-gate/README.md` with: the d
 - [ ] **Step 5: Commit**
 
 ```bash
-git add project.yml EchoApp docs/superpowers/spikes/2026-10-10-background-gate
+git add project.yml SoundSightApp docs/superpowers/spikes/2026-10-10-background-gate
 git commit -m "Keep listening in the background and log detections in the probe" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -660,9 +660,9 @@ git commit -m "Keep listening in the background and log detections in the probe"
 ### Task 2: Urgency score, bands, gradient hue and source levels
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/Urgency/UrgencyScore.swift`, `EchoCore/Sources/EchoCore/Urgency/SourceLevels.swift`, `EchoCore/Sources/EchoCore/Resources/source_levels.json`
-- Modify (replace): `EchoCore/Sources/EchoCore/Classification/ClassificationResources.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/UrgencyScoreTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/Urgency/UrgencyScore.swift`, `SoundSightCore/Sources/SoundSightCore/Urgency/SourceLevels.swift`, `SoundSightCore/Sources/SoundSightCore/Resources/source_levels.json`
+- Modify (replace): `SoundSightCore/Sources/SoundSightCore/Classification/ClassificationResources.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/UrgencyScoreTests.swift`
 
 **Interfaces:**
 - Consumes: `Urgency`, `UrgencyMap`, `ResourceError`, `ClassificationResources` (base plan Task 8).
@@ -678,12 +678,12 @@ git commit -m "Keep listening in the background and log detections in the probe"
 
 - [ ] **Step 1: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/UrgencyScoreTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/UrgencyScoreTests.swift`:
 
 ```swift
 import Foundation
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct UrgencyScoreTests {
     func score(_ u: Urgency, _ sourceLevel: Double, _ level: Double) -> Double {
@@ -750,12 +750,12 @@ struct UrgencyScoreTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'UrgencyScore' in scope`.
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/Urgency/UrgencyScore.swift`:
+`SoundSightCore/Sources/SoundSightCore/Urgency/UrgencyScore.swift`:
 
 ```swift
 import Foundation
@@ -835,7 +835,7 @@ public enum UrgencyBand: Sendable, Equatable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Urgency/SourceLevels.swift`:
+`SoundSightCore/Sources/SoundSightCore/Urgency/SourceLevels.swift`:
 
 ```swift
 import Foundation
@@ -863,7 +863,7 @@ public struct SourceLevels: Sendable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Resources/source_levels.json`:
+`SoundSightCore/Sources/SoundSightCore/Resources/source_levels.json`:
 
 ```json
 {
@@ -882,7 +882,7 @@ public struct SourceLevels: Sendable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Classification/ClassificationResources.swift` (replace):
+`SoundSightCore/Sources/SoundSightCore/Classification/ClassificationResources.swift` (replace):
 
 ```swift
 import Foundation
@@ -912,13 +912,13 @@ public struct ClassificationResources: Sendable {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 71 tests in 14 suites passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add continuous urgency score from class, loudness and approximate distance" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -927,9 +927,9 @@ git commit -m "Add continuous urgency score from class, loudness and approximate
 ### Task 3: Tracker loudness, Silence filter and notification policy
 
 **Files:**
-- Modify (replace): `EchoCore/Sources/EchoCore/Fusion/EventTracker.swift`
-- Create: `EchoCore/Sources/EchoCore/Alerts/NotificationPolicy.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/EventTrackerLevelTests.swift`, `EchoCore/Tests/EchoCoreTests/NotificationPolicyTests.swift`
+- Modify (replace): `SoundSightCore/Sources/SoundSightCore/Fusion/EventTracker.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/Alerts/NotificationPolicy.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/EventTrackerLevelTests.swift`, `SoundSightCore/Tests/SoundSightCoreTests/NotificationPolicyTests.swift`
 
 **Interfaces:**
 - Consumes: `EventTracker`, `SoundEvent` (base plan Task 11); `UrgencyScore.urgentThreshold` (Task 2).
@@ -937,15 +937,15 @@ git commit -m "Add continuous urgency score from class, loudness and approximate
   - `SoundEvent.levelDB: Double?`.
   - `EventTracker.init(urgencyMap:evictAfter:emaAlpha:diffusenessCutoff:ignoredGroups: = ["Silence"])`.
   - `EventTracker.ingest(active:doa:now:levelDB: Double? = nil)`. Existing callers still compile.
-  - `struct NotificationPolicy { static let identifier = "echo.urgent"; mutating func shouldNotify(group:score:now:isForeground:) -> Bool }`.
+  - `struct NotificationPolicy { static let identifier = "soundsight.urgent"; mutating func shouldNotify(group:score:now:isForeground:) -> Bool }`.
 
 - [ ] **Step 1: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/EventTrackerLevelTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/EventTrackerLevelTests.swift`:
 
 ```swift
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct EventTrackerLevelTests {
     let urgency = UrgencyMap(tiers: ["Dog": .medium])
@@ -977,11 +977,11 @@ struct EventTrackerLevelTests {
 }
 ```
 
-`EchoCore/Tests/EchoCoreTests/NotificationPolicyTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/NotificationPolicyTests.swift`:
 
 ```swift
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct NotificationPolicyTests {
     @Test func notificationsNeverInForegroundOrBelowUrgent() {
@@ -992,7 +992,7 @@ struct NotificationPolicyTests {
             p.shouldNotify(group: "Siren", score: 0.75, now: 0, isForeground: false),
         ]
         #expect(sent == [false, false, true])
-        #expect(NotificationPolicy.identifier == "echo.urgent")
+        #expect(NotificationPolicy.identifier == "soundsight.urgent")
     }
 
     @Test func notificationGlobalGap() {
@@ -1021,12 +1021,12 @@ struct NotificationPolicyTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `extra argument 'levelDB' in call` and `cannot find 'NotificationPolicy' in scope`.
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/Fusion/EventTracker.swift` (replace):
+`SoundSightCore/Sources/SoundSightCore/Fusion/EventTracker.swift` (replace):
 
 ```swift
 import Foundation
@@ -1104,13 +1104,13 @@ public final class EventTracker {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Alerts/NotificationPolicy.swift`:
+`SoundSightCore/Sources/SoundSightCore/Alerts/NotificationPolicy.swift`:
 
 ```swift
 /// When to post the urgent notification (urgency spec §6). Every notification reuses one
 /// identifier, so a new one replaces the last instead of stacking.
 public struct NotificationPolicy: Sendable {
-    public static let identifier = "echo.urgent"
+    public static let identifier = "soundsight.urgent"
 
     public var minGap = 10.0
     public var groupCooldown = 30.0
@@ -1134,13 +1134,13 @@ public struct NotificationPolicy: Sendable {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 77 tests in 16 suites passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Track per-event loudness, ignore Silence, add never-stacking notification policy" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -1149,9 +1149,9 @@ git commit -m "Track per-event loudness, ignore Silence, add never-stacking noti
 ### Task 4: Radar sweep, tight halo, Live Activity throttle, short directions
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/Display/RadarSweep.swift`, `EchoCore/Sources/EchoCore/Display/Halo.swift`, `EchoCore/Sources/EchoCore/Display/LiveActivityThrottle.swift`
-- Modify (replace): `EchoCore/Sources/EchoCore/Alerts/DirectionPhrase.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/DisplayTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/Display/RadarSweep.swift`, `SoundSightCore/Sources/SoundSightCore/Display/Halo.swift`, `SoundSightCore/Sources/SoundSightCore/Display/LiveActivityThrottle.swift`
+- Modify (replace): `SoundSightCore/Sources/SoundSightCore/Alerts/DirectionPhrase.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/DisplayTests.swift`
 
 **Interfaces:**
 - Consumes: `Circular`, `AzimuthBelief`, `DOAPeak` (base plan).
@@ -1164,11 +1164,11 @@ git commit -m "Track per-event loudness, ignore Silence, add never-stacking noti
 
 - [ ] **Step 1: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/DisplayTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/DisplayTests.swift`:
 
 ```swift
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct DisplayTests {
     @Test func sweepFadesOutAfterThreeSeconds() {
@@ -1243,12 +1243,12 @@ struct DisplayTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'RadarSweep' in scope` (and `Halo`, `LiveActivityThrottle`, `LiveActivitySnapshot`, `short`).
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/Display/RadarSweep.swift`:
+`SoundSightCore/Sources/SoundSightCore/Display/RadarSweep.swift`:
 
 ```swift
 /// The radar sweep only plays right after Start Listening (urgency spec §3):
@@ -1265,7 +1265,7 @@ public enum RadarSweep {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Display/Halo.swift`:
+`SoundSightCore/Sources/SoundSightCore/Display/Halo.swift`:
 
 ```swift
 /// One belief bin to draw in the radar halo.
@@ -1297,7 +1297,7 @@ public enum Halo {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Display/LiveActivityThrottle.swift`:
+`SoundSightCore/Sources/SoundSightCore/Display/LiveActivityThrottle.swift`:
 
 ```swift
 /// What the lock-screen bar shows, reduced to the fields that decide whether to update it.
@@ -1350,7 +1350,7 @@ public struct LiveActivityThrottle: Sendable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Alerts/DirectionPhrase.swift` (replace):
+`SoundSightCore/Sources/SoundSightCore/Alerts/DirectionPhrase.swift` (replace):
 
 ```swift
 /// Spoken description of a radar angle for VoiceOver (spec §3.6), e.g. "behind you to the right (4 o'clock)".
@@ -1385,13 +1385,13 @@ public enum DirectionPhrase {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 84 tests in 17 suites passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add radar sweep fade, tight halo selection, Live Activity throttle and short directions" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -1400,18 +1400,18 @@ git commit -m "Add radar sweep fade, tight halo selection, Live Activity throttl
 ### Task 5: Gradient GUI, focus card and score-based haptics
 
 **Files:**
-- Modify (replace): `EchoCore/Sources/EchoCore/Alerts/HapticGate.swift`, `EchoCore/Tests/EchoCoreTests/AlertTests.swift`
-- Create: `EchoShared/UrgencyColor.swift`, `EchoApp/App/EventDisplay.swift`, `EchoApp/UI/FocusCard.swift`
-- Modify (replace): `project.yml`, `EchoApp/App/AppModel.swift`, `EchoApp/Capture/AudioPipeline.swift`, `EchoApp/Haptics/HapticsManager.swift`, `EchoApp/UI/RadarView.swift`, `EchoApp/UI/EventListView.swift`, `EchoApp/UI/MainView.swift`, `EchoApp/UI/StatusBanner.swift`
-- Delete: `EchoApp/UI/UrgencyStyle.swift`. The gradient replaces `Urgency.color`/`label`.
+- Modify (replace): `SoundSightCore/Sources/SoundSightCore/Alerts/HapticGate.swift`, `SoundSightCore/Tests/SoundSightCoreTests/AlertTests.swift`
+- Create: `SoundSightShared/UrgencyColor.swift`, `SoundSightApp/App/EventDisplay.swift`, `SoundSightApp/UI/FocusCard.swift`
+- Modify (replace): `project.yml`, `SoundSightApp/App/AppModel.swift`, `SoundSightApp/Capture/AudioPipeline.swift`, `SoundSightApp/Haptics/HapticsManager.swift`, `SoundSightApp/UI/RadarView.swift`, `SoundSightApp/UI/EventListView.swift`, `SoundSightApp/UI/MainView.swift`, `SoundSightApp/UI/StatusBanner.swift`
+- Delete: `SoundSightApp/UI/UrgencyStyle.swift`. The gradient replaces `Urgency.color`/`label`.
 
 **Interfaces:**
 - Consumes: everything from Tasks 1–4.
 - Produces:
-  - **EchoCore:**
+  - **SoundSightCore:**
     - `enum HapticPattern { single, double, triple; init?(score:) }`.
     - `HapticGate.shouldFire(group:score:now:) -> HapticPattern?`. It replaces `shouldFire(group:urgency:now:)`.
-  - **Shared:** `Color.urgency(_ score: Double) -> Color` and `UrgencyBar(score: Double?)`, in `EchoShared`.
+  - **Shared:** `Color.urgency(_ score: Double) -> Color` and `UrgencyBar(score: Double?)`, in `SoundSightShared`.
   - **EventDisplay:**
     - Fields `score`, `band`, `levelDB`, `distance`, `peakBearing` and `levelText: String?`.
     - Methods `radarAngle(forward:)`, `directionPhrase(forward:)` and `shortDirection(forward:)`.
@@ -1425,13 +1425,13 @@ git commit -m "Add radar sweep fade, tight halo selection, Live Activity throttl
     - `FocusCard(event:forward:isListening:)`.
   - **`HapticsManager`:** `alert(group:score:now:)` and `reset()`.
 
-- [ ] **Step 1: Write the failing test (EchoCore)**
+- [ ] **Step 1: Write the failing test (SoundSightCore)**
 
-`EchoCore/Tests/EchoCoreTests/AlertTests.swift` (replace):
+`SoundSightCore/Tests/SoundSightCoreTests/AlertTests.swift` (replace):
 
 ```swift
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct AlertTests {
     @Test func hapticPatternsFollowScore() {
@@ -1465,12 +1465,12 @@ struct AlertTests {
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'HapticPattern' in scope`.
 
 - [ ] **Step 3: Implement the haptic gate**
 
-`EchoCore/Sources/EchoCore/Alerts/HapticGate.swift` (replace):
+`SoundSightCore/Sources/SoundSightCore/Alerts/HapticGate.swift` (replace):
 
 ```swift
 /// Haptic pattern for an urgency score (urgency spec §3): ≥ 0.75 triple, ≥ 0.5 double, ≥ 0.3 single.
@@ -1508,7 +1508,7 @@ public struct HapticGate: Sendable {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 85 tests in 17 suites passed`.
 
 - [ ] **Step 5: Write the app files**
@@ -1516,8 +1516,8 @@ Expected: `Test run with 85 tests in 17 suites passed`.
 Delete the old tier styling first:
 
 ```bash
-git rm EchoApp/UI/UrgencyStyle.swift
-mkdir -p EchoShared
+git rm SoundSightApp/UI/UrgencyStyle.swift
+mkdir -p SoundSightShared
 ```
 
 `project.yml` (replace):
@@ -1530,8 +1530,8 @@ options:
     iOS: "26.0"
   createIntermediateGroups: true
 packages:
-  EchoCore:
-    path: EchoCore
+  SoundSightCore:
+    path: SoundSightCore
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -1541,18 +1541,18 @@ targets:
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: EchoApp
+      - path: SoundSightApp
         excludes:
           - "Config/**"
           - "Info.plist"
-      - path: EchoShared
+      - path: SoundSightShared
     dependencies:
-      - package: EchoCore
+      - package: SoundSightCore
     configFiles:
-      Debug: EchoApp/Config/App.xcconfig
-      Release: EchoApp/Config/App.xcconfig
+      Debug: SoundSightApp/Config/App.xcconfig
+      Release: SoundSightApp/Config/App.xcconfig
     info:
-      path: EchoApp/Info.plist
+      path: SoundSightApp/Info.plist
       properties:
         CFBundleDisplayName: SoundSight
         UILaunchScreen: {}
@@ -1567,10 +1567,10 @@ targets:
     scheme: {}
 ```
 
-`EchoShared/UrgencyColor.swift`:
+`SoundSightShared/UrgencyColor.swift`:
 
 ```swift
-import EchoCore
+import SoundSightCore
 import SwiftUI
 
 extension Color {
@@ -1606,10 +1606,10 @@ struct UrgencyBar: View {
 }
 ```
 
-`EchoApp/App/EventDisplay.swift`:
+`SoundSightApp/App/EventDisplay.swift`:
 
 ```swift
-import EchoCore
+import SoundSightCore
 
 /// What the UI needs for one tracked sound.
 struct EventDisplay: Identifiable, Equatable {
@@ -1669,11 +1669,11 @@ struct EventDisplay: Identifiable, Equatable {
 }
 ```
 
-`EchoApp/App/AppModel.swift` (replace):
+`SoundSightApp/App/AppModel.swift` (replace):
 
 ```swift
 import AVFoundation
-import EchoCore
+import SoundSightCore
 import Observation
 import SwiftUI
 
@@ -1849,10 +1849,10 @@ final class AppModel {
 }
 ```
 
-`EchoApp/Capture/AudioPipeline.swift` (replace):
+`SoundSightApp/Capture/AudioPipeline.swift` (replace):
 
 ```swift
-import EchoCore
+import SoundSightCore
 import Foundation
 import os
 import simd
@@ -1874,7 +1874,7 @@ struct TrackerOutput: Sendable {
 
 /// Chunk → SoundAnalysis + 1 s windows → DOA → joiner → EventTracker, all on one serial queue (spec §3).
 final class AudioPipeline: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "echo.pipeline")
+    private let queue = DispatchQueue(label: "soundsight.pipeline")
     private let resources: ClassificationResources
     private let estimator: DOAEstimator
     private let tracker: EventTracker
@@ -1972,11 +1972,11 @@ final class AudioPipeline: @unchecked Sendable {
 }
 ```
 
-`EchoApp/Haptics/HapticsManager.swift` (replace):
+`SoundSightApp/Haptics/HapticsManager.swift` (replace):
 
 ```swift
 import CoreHaptics
-import EchoCore
+import SoundSightCore
 
 /// Score-tiered Core Haptics patterns with a per-group cooldown (urgency spec §3). Foreground only:
 /// Core Haptics doesn't play in the background, where the urgent notification vibrates instead.
@@ -2020,10 +2020,10 @@ final class HapticsManager {
 }
 ```
 
-`EchoApp/UI/RadarView.swift` (replace):
+`SoundSightApp/UI/RadarView.swift` (replace):
 
 ```swift
-import EchoCore
+import SoundSightCore
 import SwiftUI
 
 /// 360° radar: a tight belief halo, arrows and labels in the urgency gradient, counter-rotated by the
@@ -2101,10 +2101,10 @@ struct RadarView: View {
 }
 ```
 
-`EchoApp/UI/FocusCard.swift`:
+`SoundSightApp/UI/FocusCard.swift`:
 
 ```swift
-import EchoCore
+import SoundSightCore
 import SwiftUI
 
 /// The most urgent sound, in large text under the radar: class, volume, distance, direction and the gradient bar.
@@ -2152,10 +2152,10 @@ struct FocusCard: View {
 }
 ```
 
-`EchoApp/UI/EventListView.swift` (replace):
+`SoundSightApp/UI/EventListView.swift` (replace):
 
 ```swift
-import EchoCore
+import SoundSightCore
 import SwiftUI
 
 /// The other tracked sounds, under the focus card.
@@ -2186,7 +2186,7 @@ struct EventListView: View {
 }
 ```
 
-`EchoApp/UI/MainView.swift` (replace):
+`SoundSightApp/UI/MainView.swift` (replace):
 
 ```swift
 import SwiftUI
@@ -2232,7 +2232,7 @@ struct MainView: View {
 }
 ```
 
-`EchoApp/UI/StatusBanner.swift` (replace):
+`SoundSightApp/UI/StatusBanner.swift` (replace):
 
 ```swift
 import SwiftUI
@@ -2293,7 +2293,7 @@ Expected: no `error:` or warnings.
 The device check comes in Task 8.
 
 ```bash
-git add EchoCore EchoShared EchoApp project.yml
+git add SoundSightCore SoundSightShared SoundSightApp project.yml
 git commit -m "Show urgency as a gradient with a focus card, tight halo, short sweep and score haptics" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -2302,8 +2302,8 @@ git commit -m "Show urgency as a gradient with a focus card, tight halo, short s
 ### Task 6: One urgent notification that never stacks
 
 **Files:**
-- Create: `EchoApp/Alerts/UrgentNotifier.swift`
-- Modify (replace): `EchoApp/App/AppModel.swift`
+- Create: `SoundSightApp/Alerts/UrgentNotifier.swift`
+- Modify (replace): `SoundSightApp/App/AppModel.swift`
 
 **Interfaces:**
 - Consumes: `NotificationPolicy` (Task 3); `EventDisplay`, `AppModel` (Task 5).
@@ -2313,10 +2313,10 @@ git commit -m "Show urgency as a gradient with a focus card, tight halo, short s
 
 - [ ] **Step 1: Write the files**
 
-`EchoApp/Alerts/UrgentNotifier.swift`:
+`SoundSightApp/Alerts/UrgentNotifier.swift`:
 
 ```swift
-import EchoCore
+import SoundSightCore
 import UserNotifications
 
 /// The single urgent notification (urgency spec §6). Every request uses the same identifier, so a new
@@ -2357,11 +2357,11 @@ final class UrgentNotifier {
 }
 ```
 
-`EchoApp/App/AppModel.swift` (replace):
+`SoundSightApp/App/AppModel.swift` (replace):
 
 ```swift
 import AVFoundation
-import EchoCore
+import SoundSightCore
 import Observation
 import SwiftUI
 
@@ -2552,7 +2552,7 @@ Expected: no `error:` or warnings.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add EchoApp
+git add SoundSightApp
 git commit -m "Send one replaceable urgent notification while in the background" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -2561,15 +2561,15 @@ git commit -m "Send one replaceable urgent notification while in the background"
 ### Task 7: Live Activity on the lock screen and Dynamic Island
 
 **Files:**
-- Create: `EchoShared/EchoActivityAttributes.swift`, `EchoLiveActivity/EchoLiveActivityWidget.swift`, `EchoApp/Alerts/LiveActivityController.swift`
-- Modify (replace): `project.yml`, `EchoApp/App/AppModel.swift`, `.gitignore`
+- Create: `SoundSightShared/SoundSightActivityAttributes.swift`, `SoundSightLiveActivity/SoundSightLiveActivityWidget.swift`, `SoundSightApp/Alerts/LiveActivityController.swift`
+- Modify (replace): `project.yml`, `SoundSightApp/App/AppModel.swift`, `.gitignore`
 
 **Interfaces:**
 - Consumes: `LiveActivityThrottle`, `LiveActivitySnapshot` (Task 4); `UrgencyBar`, `Color.urgency`, `EventDisplay` (Task 5).
 - Produces:
-  - `EchoActivityAttributes.ContentState { group, score, detail, radarAngle, band, paused; static let idle }`.
+  - `SoundSightActivityAttributes.ContentState { group, score, detail, radarAngle, band, paused; static let idle }`.
   - `LiveActivityController` with `start()`, `stop()`, `show(_:forward:paused:)` and `onProblem`.
-  - The `EchoLiveActivity` widget extension target (`com.hackatl.soundsight.liveactivity`), embedded in the app.
+  - The `SoundSightLiveActivity` widget extension target (`com.hackatl.soundsight.liveactivity`), embedded in the app.
   - `AppModel.liveActivityNote`.
 
 Signing note: local Live Activity updates need neither push notifications nor App Groups, so the free Personal Team can sign the extension. A signed device build was verified while writing this plan.
@@ -2577,7 +2577,7 @@ Signing note: local Live Activity updates need neither push notifications nor Ap
 - [ ] **Step 1: Write the files**
 
 ```bash
-mkdir -p EchoLiveActivity EchoApp/Alerts
+mkdir -p SoundSightLiveActivity SoundSightApp/Alerts
 ```
 
 `project.yml` (replace):
@@ -2590,8 +2590,8 @@ options:
     iOS: "26.0"
   createIntermediateGroups: true
 packages:
-  EchoCore:
-    path: EchoCore
+  SoundSightCore:
+    path: SoundSightCore
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -2601,19 +2601,19 @@ targets:
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: EchoApp
+      - path: SoundSightApp
         excludes:
           - "Config/**"
           - "Info.plist"
-      - path: EchoShared
+      - path: SoundSightShared
     dependencies:
-      - package: EchoCore
-      - target: EchoLiveActivity
+      - package: SoundSightCore
+      - target: SoundSightLiveActivity
     configFiles:
-      Debug: EchoApp/Config/App.xcconfig
-      Release: EchoApp/Config/App.xcconfig
+      Debug: SoundSightApp/Config/App.xcconfig
+      Release: SoundSightApp/Config/App.xcconfig
     info:
-      path: EchoApp/Info.plist
+      path: SoundSightApp/Info.plist
       properties:
         CFBundleDisplayName: SoundSight
         UILaunchScreen: {}
@@ -2627,22 +2627,22 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.hackatl.soundsight
         TARGETED_DEVICE_FAMILY: "1"
     scheme: {}
-  EchoLiveActivity:
+  SoundSightLiveActivity:
     type: app-extension
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: EchoLiveActivity
+      - path: SoundSightLiveActivity
         excludes:
           - "Info.plist"
-      - path: EchoShared
+      - path: SoundSightShared
     dependencies:
-      - package: EchoCore
+      - package: SoundSightCore
     configFiles:
-      Debug: EchoApp/Config/App.xcconfig
-      Release: EchoApp/Config/App.xcconfig
+      Debug: SoundSightApp/Config/App.xcconfig
+      Release: SoundSightApp/Config/App.xcconfig
     info:
-      path: EchoLiveActivity/Info.plist
+      path: SoundSightLiveActivity/Info.plist
       properties:
         CFBundleDisplayName: SoundSight
         NSExtension:
@@ -2658,11 +2658,11 @@ targets:
 ```gitignore
 # Generated by XcodeGen (run `xcodegen generate`)
 SoundSight.xcodeproj/
-EchoApp/Info.plist
-EchoLiveActivity/Info.plist
+SoundSightApp/Info.plist
+SoundSightLiveActivity/Info.plist
 
 # Personal signing settings
-EchoApp/Config/Signing.xcconfig
+SoundSightApp/Config/Signing.xcconfig
 
 # Build products
 .build/
@@ -2673,14 +2673,14 @@ xcuserdata/
 .DS_Store
 ```
 
-`EchoShared/EchoActivityAttributes.swift`:
+`SoundSightShared/SoundSightActivityAttributes.swift`:
 
 ```swift
 import ActivityKit
 import Foundation
 
 /// The lock-screen / Dynamic Island bar (urgency spec §5). Compiled into the app and the widget extension.
-struct EchoActivityAttributes: ActivityAttributes {
+struct SoundSightActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         /// Most urgent sound; nil shows "Listening…".
         var group: String?
@@ -2698,7 +2698,7 @@ struct EchoActivityAttributes: ActivityAttributes {
 }
 ```
 
-`EchoLiveActivity/EchoLiveActivityWidget.swift`:
+`SoundSightLiveActivity/SoundSightLiveActivityWidget.swift`:
 
 ```swift
 import ActivityKit
@@ -2706,14 +2706,14 @@ import SwiftUI
 import WidgetKit
 
 @main
-struct EchoWidgets: WidgetBundle {
-    var body: some Widget { EchoLiveActivityWidget() }
+struct SoundSightWidgets: WidgetBundle {
+    var body: some Widget { SoundSightLiveActivityWidget() }
 }
 
 /// Lock-screen banner and Dynamic Island for the most urgent sound (urgency spec §5).
-struct EchoLiveActivityWidget: Widget {
+struct SoundSightLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: EchoActivityAttributes.self) { context in
+        ActivityConfiguration(for: SoundSightActivityAttributes.self) { context in
             LiveBanner(state: context.state)
                 .padding(16)
                 .activityBackgroundTint(Color.black.opacity(0.75))
@@ -2733,7 +2733,7 @@ struct EchoLiveActivityWidget: Widget {
 }
 
 struct LiveBanner: View {
-    let state: EchoActivityAttributes.ContentState
+    let state: SoundSightActivityAttributes.ContentState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -2760,7 +2760,7 @@ struct LiveBanner: View {
 }
 
 struct StatusDot: View {
-    let state: EchoActivityAttributes.ContentState
+    let state: SoundSightActivityAttributes.ContentState
 
     var body: some View {
         Circle()
@@ -2771,7 +2771,7 @@ struct StatusDot: View {
 
 /// Arrow toward the sound, relative to the phone's forward direction.
 struct DirectionArrow: View {
-    let state: EchoActivityAttributes.ContentState
+    let state: SoundSightActivityAttributes.ContentState
 
     var body: some View {
         if state.group == nil {
@@ -2787,17 +2787,17 @@ struct DirectionArrow: View {
 }
 ```
 
-`EchoApp/Alerts/LiveActivityController.swift`:
+`SoundSightApp/Alerts/LiveActivityController.swift`:
 
 ```swift
 import ActivityKit
-import EchoCore
+import SoundSightCore
 import Foundation
 
 /// Owns the lock-screen / Dynamic Island bar while listening (urgency spec §5).
 @MainActor
 final class LiveActivityController {
-    private var activity: Activity<EchoActivityAttributes>?
+    private var activity: Activity<SoundSightActivityAttributes>?
     private var throttle = LiveActivityThrottle()
     private var wanted = false
     private var watcher: Task<Void, Never>?
@@ -2826,7 +2826,7 @@ final class LiveActivityController {
         let snapshot = LiveActivitySnapshot(group: focus?.group, score: focus?.score ?? 0, levelDB: focus?.levelDB ?? 0,
                                             radarAngle: angle, paused: paused)
         guard throttle.shouldSend(snapshot, now: ProcessInfo.processInfo.systemUptime) else { return }
-        let state = EchoActivityAttributes.ContentState(group: focus?.group, score: focus?.score ?? 0, detail: focus?.levelText ?? "",
+        let state = SoundSightActivityAttributes.ContentState(group: focus?.group, score: focus?.score ?? 0, detail: focus?.levelText ?? "",
                                                         radarAngle: angle, band: focus?.band.label ?? "", paused: paused)
         Task { await activity.update(ActivityContent(state: state, staleDate: Date().addingTimeInterval(10))) }
     }
@@ -2837,7 +2837,7 @@ final class LiveActivityController {
             return
         }
         do {
-            let a = try Activity.request(attributes: EchoActivityAttributes(), content: ActivityContent(state: .idle, staleDate: nil))
+            let a = try Activity.request(attributes: SoundSightActivityAttributes(), content: ActivityContent(state: .idle, staleDate: nil))
             activity = a
             onProblem?(nil)
             watcher?.cancel()
@@ -2861,11 +2861,11 @@ final class LiveActivityController {
 }
 ```
 
-`EchoApp/App/AppModel.swift` (replace):
+`SoundSightApp/App/AppModel.swift` (replace):
 
 ```swift
 import AVFoundation
-import EchoCore
+import SoundSightCore
 import Observation
 import SwiftUI
 
@@ -3065,12 +3065,12 @@ final class AppModel {
 - [ ] **Step 2: Build and check that the extension is embedded**
 
 Run: `xcodegen generate && xcodebuild -project SoundSight.xcodeproj -scheme SoundSight -destination 'generic/platform=iOS' -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build -quiet && ls .build/xcode/Build/Products/Debug-iphoneos/SoundSight.app/PlugIns`
-Expected: no `error:` or warnings; prints `EchoLiveActivity.appex`.
+Expected: no `error:` or warnings; prints `SoundSightLiveActivity.appex`.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add project.yml .gitignore EchoShared EchoLiveActivity EchoApp
+git add project.yml .gitignore SoundSightShared SoundSightLiveActivity SoundSightApp
 git commit -m "Add lock-screen and Dynamic Island Live Activity for the most urgent sound" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -3111,7 +3111,7 @@ cat >> README.md <<'EOF'
 
 ## Urgency, background and lock screen
 
-- **Urgency gradient:** every sound gets a score from 0 to 1, built from its class (its urgency tier), its loudness and an approximate distance. The distance comes from comparing the heard level with that sound's typical level at 1 m (`EchoCore/Sources/EchoCore/Resources/source_levels.json`). Green is low, yellow moderate and red urgent. dB values and distances are approximate: the mic is uncalibrated.
+- **Urgency gradient:** every sound gets a score from 0 to 1, built from its class (its urgency tier), its loudness and an approximate distance. The distance comes from comparing the heard level with that sound's typical level at 1 m (`SoundSightCore/Sources/SoundSightCore/Resources/source_levels.json`). Green is low, yellow moderate and red urgent. dB values and distances are approximate: the mic is uncalibrated.
 - **Background:** once you tap Start Listening, SoundSight keeps listening when you lock the phone or switch apps. The orange mic indicator stays on.
 - **Lock-screen bar:** a Live Activity shows the most urgent sound with its direction arrow, on the lock screen and in the Dynamic Island. Turn it off in Settings › SoundSight › Live Activities.
 - **Urgent notification:** while the phone is locked or SoundSight is in the background, urgent sounds post one notification that replaces the previous one instead of stacking (at most one every 10 s).
@@ -3120,7 +3120,7 @@ EOF
 
 - [ ] **Step 3: Final verification**
 
-Run: `swift test --package-path EchoCore && xcodegen generate && xcodebuild -project SoundSight.xcodeproj -scheme SoundSight -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build -quiet && git status --short`
+Run: `swift test --package-path SoundSightCore && xcodegen generate && xcodebuild -project SoundSight.xcodeproj -scheme SoundSight -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build -quiet && git status --short`
 Expected: `Test run with 85 tests in 17 suites passed`; the build is clean; `git status` lists only `README.md`.
 
 - [ ] **Step 4: Commit**

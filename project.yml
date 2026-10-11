@@ -5,8 +5,8 @@ options:
     iOS: "26.0"
   createIntermediateGroups: true
 packages:
-  EchoCore:
-    path: EchoCore
+  SoundSightCore:
+    path: SoundSightCore
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -16,19 +16,19 @@ targets:
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: EchoApp
+      - path: SoundSightApp
         excludes:
           - "Config/**"
           - "Info.plist"
-      - path: EchoShared
+      - path: SoundSightShared
     dependencies:
-      - package: EchoCore
-      - target: EchoLiveActivity
+      - package: SoundSightCore
+      - target: SoundSightLiveActivity
     configFiles:
-      Debug: EchoApp/Config/App.xcconfig
-      Release: EchoApp/Config/App.xcconfig
+      Debug: SoundSightApp/Config/App.xcconfig
+      Release: SoundSightApp/Config/App.xcconfig
     info:
-      path: EchoApp/Info.plist
+      path: SoundSightApp/Info.plist
       properties:
         CFBundleDisplayName: SoundSight
         CFBundleShortVersionString: "2.2"
@@ -44,22 +44,22 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme: {}
-  EchoLiveActivity:
+  SoundSightLiveActivity:
     type: app-extension
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: EchoLiveActivity
+      - path: SoundSightLiveActivity
         excludes:
           - "Info.plist"
-      - path: EchoShared
+      - path: SoundSightShared
     dependencies:
-      - package: EchoCore
+      - package: SoundSightCore
     configFiles:
-      Debug: EchoApp/Config/App.xcconfig
-      Release: EchoApp/Config/App.xcconfig
+      Debug: SoundSightApp/Config/App.xcconfig
+      Release: SoundSightApp/Config/App.xcconfig
     info:
-      path: EchoLiveActivity/Info.plist
+      path: SoundSightLiveActivity/Info.plist
       properties:
         CFBundleDisplayName: SoundSight
         CFBundleShortVersionString: "2.2"

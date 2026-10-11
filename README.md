@@ -14,7 +14,7 @@ Design: [`docs/superpowers/specs/2026-10-10-soundsight-ios-foa-design.md`](docs/
 ## Build and run
 
 ```sh
-cp EchoApp/Config/Signing.xcconfig.example EchoApp/Config/Signing.xcconfig   # then set DEVELOPMENT_TEAM
+cp SoundSightApp/Config/Signing.xcconfig.example SoundSightApp/Config/Signing.xcconfig   # then set DEVELOPMENT_TEAM
 xcodegen generate
 open SoundSight.xcodeproj
 ```
@@ -23,20 +23,20 @@ Select your iPhone as the run destination and press Run. Re-run `xcodegen genera
 
 ## Tests
 
-The DSP, classification-mapping and fusion logic lives in the `EchoCore` Swift package and is tested on the Mac:
+The DSP, classification-mapping and fusion logic lives in the `SoundSightCore` Swift package and is tested on the Mac:
 
 ```sh
-swift test --package-path EchoCore
+swift test --package-path SoundSightCore
 ```
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `EchoCore/` | Pure Swift logic: FOA intensity, direction finding, axis calibration and orientation correction, label mapping, YAMNet frontend, urgency score, event tracking, ambient level and new-sound markers |
-| `EchoApp/` | iOS app: capture, SoundAnalysis and YAMNet classifiers, motion, haptics, notifications, SwiftUI, Settings, FOA probe |
-| `EchoShared/` | Code shared by the app and the Live Activity (urgency colors, activity attributes) |
-| `EchoLiveActivity/` | Widget extension: lock-screen bar and Dynamic Island |
+| `SoundSightCore/` | Pure Swift logic: FOA intensity, direction finding, axis calibration and orientation correction, label mapping, YAMNet frontend, urgency score, event tracking, ambient level and new-sound markers |
+| `SoundSightApp/` | iOS app: capture, SoundAnalysis and YAMNet classifiers, motion, haptics, notifications, SwiftUI, Settings, FOA probe |
+| `SoundSightShared/` | Code shared by the app and the Live Activity (urgency colors, activity attributes) |
+| `SoundSightLiveActivity/` | Widget extension: lock-screen bar and Dynamic Island |
 | `docs/superpowers/` | Specs, spike and device-test results, implementation plans |
 
 ## Using SoundSight
@@ -56,7 +56,7 @@ Tap **Start Listening**. iOS asks for microphone, motion and notification access
   - Named sounds update their direction 10 times a second, and their arrows hide 1 s after sound stops coming from there.
   - New sounds near a named arrow join it, and the radar draws one named arrow per spot.
 - **Touching the phone:** taps, bumps and screen touches are detected with the motion sensors and ignored for a quarter-second.
-- **Urgency gradient:** each sound gets a score from 0 to 1, combining its group, how loud it is, and a rough distance. The distance compares the heard level with the sound's typical level at 1 m (`EchoCore/Sources/EchoCore/Resources/source_levels.json`). Green means low, yellow moderate, red urgent. The card under the radar shows the most urgent sound with its volume, distance and direction.
+- **Urgency gradient:** each sound gets a score from 0 to 1, combining its group, how loud it is, and a rough distance. The distance compares the heard level with the sound's typical level at 1 m (`SoundSightCore/Sources/SoundSightCore/Resources/source_levels.json`). Green means low, yellow moderate, red urgent. The card under the radar shows the most urgent sound with its volume, distance and direction.
 - **Ambient ring:** a light-blue ring that grows thicker and stronger as the room gets louder. It is thicker on the side the background noise comes from. The `Ambient NN dB · Quiet/Moderate/Loud/Very loud` line sits under the radar. Above 80 dB a banner warns that sounds may be missed.
 - **Volume figures are approximate:** the microphone is uncalibrated.
 

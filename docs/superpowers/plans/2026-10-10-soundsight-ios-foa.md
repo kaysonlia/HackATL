@@ -4,7 +4,7 @@
 
 **Goal:** Build the SoundSight hackathon demo for iPhone 16 Pro Max: on-device sound classification with four urgency tiers, and a 360° world-anchored radar driven by First-Order Ambisonics (FOA) direction finding, with haptics and VoiceOver.
 
-**Architecture:** Pure logic (PCM conversion, windowing, FOA intensity, direction of arrival, axis calibration, label mapping, window joining, motion conventions, beliefs, event tracking, alert rules) lives in the `EchoCore` Swift package and is unit-tested on the Mac with `swift test`. A thin SwiftUI app (`EchoApp`, generated with XcodeGen) owns AVFoundation capture, SoundAnalysis, CoreMotion, Core Haptics and the UI. The FOA probe (Tasks 5–6) is a hard gate: no work past Task 6 starts until the probe passes on the phone.
+**Architecture:** Pure logic (PCM conversion, windowing, FOA intensity, direction of arrival, axis calibration, label mapping, window joining, motion conventions, beliefs, event tracking, alert rules) lives in the `SoundSightCore` Swift package and is unit-tested on the Mac with `swift test`. A thin SwiftUI app (`SoundSightApp`, generated with XcodeGen) owns AVFoundation capture, SoundAnalysis, CoreMotion, Core Haptics and the UI. The FOA probe (Tasks 5–6) is a hard gate: no work past Task 6 starts until the probe passes on the phone.
 
 **Tech Stack:** Swift 6.2 / Xcode 26.2, iOS 26.0, SwiftUI + Observation, AVFoundation (`AVCaptureSession` FOA), SoundAnalysis, CoreMotion, Core Haptics, Accelerate (vDSP), Swift Testing, XcodeGen.
 
@@ -13,7 +13,7 @@
 **Scope:** Spec build steps 0–6 (Tasks 1–15 here). Spec step 7 (custom Create ML classifier) gets its own plan once this one is finished. On-device tuning is deferred (spec §5).
 
 **Deliberate refinements of the spec** (same behavior, better testability):
-- The JSON tables (`apple_to_group.json`, `thresholds.json`, `urgency_map.json`) live in `EchoCore/Sources/EchoCore/Resources/` instead of `EchoApp/Resources/`, so unit tests can check them.
+- The JSON tables (`apple_to_group.json`, `thresholds.json`, `urgency_map.json`) live in `SoundSightCore/Sources/SoundSightCore/Resources/` instead of `SoundSightApp/Resources/`, so unit tests can check them.
 - The `SoundClassifier` protocol takes mono `[Float]` blocks (`analyze(_:)`) rather than `AVAudioPCMBuffer` plus a sample time; the classifier tracks its own frame position.
 - `FOAAxisCalibration` is a signed permutation without the optional yaw offset. Task 6 records the mean signed error so an offset can be added during deferred tuning if needed.
 - The probe gate also requires samples from at least 6 of the 8 directions (Review Focus 3).
@@ -22,14 +22,14 @@
 ## Global Constraints
 
 - iOS deployment target **26.0**; iPhone only (`TARGETED_DEVICE_FAMILY = 1`), portrait; Swift language mode **6**.
-- `EchoCore` platforms: `.iOS(.v26)`, `.macOS(.v15)`; swift-tools-version **6.2**; tests use **Swift Testing** (`import Testing`), not XCTest.
+- `SoundSightCore` platforms: `.iOS(.v26)`, `.macOS(.v15)`; swift-tools-version **6.2**; tests use **Swift Testing** (`import Testing`), not XCTest.
 - No third-party dependencies. Apple frameworks only; XcodeGen is a developer tool, not a dependency.
 - FOA channel order from capture is **ACN: 0 = W, 1 = Y, 2 = Z, 3 = X** (SN3D). `FOAWindow`/`FOAChunk` store them as `w, x, y, z`.
 - Bearing convention everywhere: degrees in [0, 360), **0° = +y (top edge / forward), 90° = +x (right), clockwise seen from above**. Device frame = CoreMotion's (x right, y top edge, z out of the screen).
 - Windows: **1.0 s with 50% overlap** at the capture sample rate (48 kHz expected); window starts are multiples of the hop from capture start.
 - Classification: Apple `SNClassifySoundRequest(.version1)`, `windowDuration = 1.0 s`, `overlapFactor = 0.5`, fed the W channel. Groups and urgency tiers are the 42 starting groups (`urgency_map.json`), thresholds from `thresholds.json`.
 - Tracker constants: evict **3 s** after last seen; confidence EMA α = **0.5**; skip belief updates when diffuseness > **0.8**; draw arrows only when belief concentration R ≥ **0.5**; haptic cooldown **5 s** per group.
-- Bundle identifier `com.hackatl.soundsight`. Signing comes from the git-ignored `EchoApp/Config/Signing.xcconfig`; never commit a team ID.
+- Bundle identifier `com.hackatl.soundsight`. Signing comes from the git-ignored `SoundSightApp/Config/Signing.xcconfig`; never commit a team ID.
 - Every commit message ends with the trailer line `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - Work on branch `ios-foa-design` (already created; the spec is committed there).
 
@@ -48,9 +48,9 @@ HackATL/
 ├── project.yml                                   XcodeGen spec (Task 1)
 ├── .gitignore                                    (Task 1)
 ├── README.md                                     build/run/test instructions (Task 1)
-├── EchoCore/
+├── SoundSightCore/
 │   ├── Package.swift                             (Task 1; resources added in Task 8)
-│   ├── Sources/EchoCore/
+│   ├── Sources/SoundSightCore/
 │   │   ├── DSP/Circular.swift                    bearings, circular stats (Task 1)
 │   │   ├── Audio/FOAWindow.swift                 one 1 s FOA window (Task 2)
 │   │   ├── Audio/PCMDeinterleaver.swift          raw PCM → per-channel Float (Task 2)
@@ -71,8 +71,8 @@ HackATL/
 │   │   ├── Alerts/HapticGate.swift               tier + cooldown rule (Task 12)
 │   │   ├── Alerts/DirectionPhrase.swift          VoiceOver clock phrases (Task 12)
 │   │   └── Resources/{apple_to_group,thresholds,urgency_map}.json   (Task 8)
-│   └── Tests/EchoCoreTests/                      one test file per source area; Support/FOASynth.swift
-└── EchoApp/
+│   └── Tests/SoundSightCoreTests/                      one test file per source area; Support/FOASynth.swift
+└── SoundSightApp/
     ├── Config/App.xcconfig, Config/Signing.xcconfig.example     (Task 1)
     ├── App/SoundSightApp.swift                       (Task 1, replaced in Task 5)
     ├── App/AppModel.swift                        probe model (Task 5) → full model (Task 13)
@@ -90,18 +90,18 @@ HackATL/
 ```
 
 **Commands used throughout** (run from the repo root):
-- Core tests: `swift test --package-path EchoCore`
+- Core tests: `swift test --package-path SoundSightCore`
 - App build check (no signing): `xcodegen generate && xcodebuild -project SoundSight.xcodeproj -scheme SoundSight -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build -quiet`
 - Install on the phone (human): open `SoundSight.xcodeproj`, choose the iPhone 16 Pro Max as the destination, press Run.
 
 ---
 
-### Task 1: Scaffold the repo, EchoCore package and app shell
+### Task 1: Scaffold the repo, SoundSightCore package and app shell
 
 **Files:**
-- Create: `project.yml`, `.gitignore`, `EchoApp/Config/App.xcconfig`, `EchoApp/Config/Signing.xcconfig.example`, `EchoApp/App/SoundSightApp.swift`
-- Create: `EchoCore/Package.swift`, `EchoCore/Sources/EchoCore/DSP/Circular.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/CircularTests.swift`
+- Create: `project.yml`, `.gitignore`, `SoundSightApp/Config/App.xcconfig`, `SoundSightApp/Config/Signing.xcconfig.example`, `SoundSightApp/App/SoundSightApp.swift`
+- Create: `SoundSightCore/Package.swift`, `SoundSightCore/Sources/SoundSightCore/DSP/Circular.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/CircularTests.swift`
 - Modify: `README.md` (replace the one-line placeholder)
 
 **Interfaces:**
@@ -114,31 +114,31 @@ Expected: Xcode 26.2+, Swift 6.2+, an XcodeGen version. If `xcodegen` is missing
 
 - [ ] **Step 2: Create the package manifest**
 
-`EchoCore/Package.swift`:
+`SoundSightCore/Package.swift`:
 
 ```swift
 // swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
-    name: "EchoCore",
+    name: "SoundSightCore",
     platforms: [.iOS(.v26), .macOS(.v15)],
-    products: [.library(name: "EchoCore", targets: ["EchoCore"])],
+    products: [.library(name: "SoundSightCore", targets: ["SoundSightCore"])],
     targets: [
-        .target(name: "EchoCore"),
-        .testTarget(name: "EchoCoreTests", dependencies: ["EchoCore"]),
+        .target(name: "SoundSightCore"),
+        .testTarget(name: "SoundSightCoreTests", dependencies: ["SoundSightCore"]),
     ]
 )
 ```
 
 - [ ] **Step 3: Write the failing test**
 
-`EchoCore/Tests/EchoCoreTests/CircularTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/CircularTests.swift`:
 
 ```swift
 import Testing
 import simd
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct CircularTests {
     @Test func wrapsIntoRange() {
@@ -190,12 +190,12 @@ struct CircularTests {
 
 - [ ] **Step 4: Run it to verify it fails**
 
-Run: `swift test --package-path EchoCore`
-Expected: build FAILS with `cannot find 'Circular' in scope` (SwiftPM may also complain that the `EchoCore` target has no sources).
+Run: `swift test --package-path SoundSightCore`
+Expected: build FAILS with `cannot find 'Circular' in scope` (SwiftPM may also complain that the `SoundSightCore` target has no sources).
 
 - [ ] **Step 5: Implement `Circular`**
 
-`EchoCore/Sources/EchoCore/DSP/Circular.swift`:
+`SoundSightCore/Sources/SoundSightCore/DSP/Circular.swift`:
 
 ```swift
 import Foundation
@@ -256,7 +256,7 @@ public enum Circular {
 
 - [ ] **Step 6: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 7 tests in 1 suite passed`.
 
 - [ ] **Step 7: Create the XcodeGen project and app shell**
@@ -271,8 +271,8 @@ options:
     iOS: "26.0"
   createIntermediateGroups: true
 packages:
-  EchoCore:
-    path: EchoCore
+  SoundSightCore:
+    path: SoundSightCore
 settings:
   base:
     SWIFT_VERSION: "6.0"
@@ -282,17 +282,17 @@ targets:
     platform: iOS
     deploymentTarget: "26.0"
     sources:
-      - path: EchoApp
+      - path: SoundSightApp
         excludes:
           - "Config/**"
           - "Info.plist"
     dependencies:
-      - package: EchoCore
+      - package: SoundSightCore
     configFiles:
-      Debug: EchoApp/Config/App.xcconfig
-      Release: EchoApp/Config/App.xcconfig
+      Debug: SoundSightApp/Config/App.xcconfig
+      Release: SoundSightApp/Config/App.xcconfig
     info:
-      path: EchoApp/Info.plist
+      path: SoundSightApp/Info.plist
       properties:
         CFBundleDisplayName: SoundSight
         UILaunchScreen: {}
@@ -306,7 +306,7 @@ targets:
     scheme: {}
 ```
 
-`EchoApp/Config/App.xcconfig`:
+`SoundSightApp/Config/App.xcconfig`:
 
 ```text
 // Shared app settings. Personal signing lives in the git-ignored Signing.xcconfig
@@ -315,7 +315,7 @@ CODE_SIGN_STYLE = Automatic
 #include? "Signing.xcconfig"
 ```
 
-`EchoApp/Config/Signing.xcconfig.example`:
+`SoundSightApp/Config/Signing.xcconfig.example`:
 
 ```text
 // Copy to Signing.xcconfig (git-ignored) and set your Apple Developer team ID.
@@ -323,7 +323,7 @@ CODE_SIGN_STYLE = Automatic
 DEVELOPMENT_TEAM = ABCDE12345
 ```
 
-`EchoApp/App/SoundSightApp.swift`:
+`SoundSightApp/App/SoundSightApp.swift`:
 
 ```swift
 import SwiftUI
@@ -344,10 +344,10 @@ struct SoundSightApp: App {
 ```text
 # Generated by XcodeGen (run `xcodegen generate`)
 SoundSight.xcodeproj/
-EchoApp/Info.plist
+SoundSightApp/Info.plist
 
 # Personal signing settings
-EchoApp/Config/Signing.xcconfig
+SoundSightApp/Config/Signing.xcconfig
 
 # Build products
 .build/
@@ -377,7 +377,7 @@ Design: [`docs/superpowers/specs/2026-10-10-soundsight-ios-foa-design.md`](docs/
 ## Build and run
 
 ```sh
-cp EchoApp/Config/Signing.xcconfig.example EchoApp/Config/Signing.xcconfig   # then set DEVELOPMENT_TEAM
+cp SoundSightApp/Config/Signing.xcconfig.example SoundSightApp/Config/Signing.xcconfig   # then set DEVELOPMENT_TEAM
 xcodegen generate
 open SoundSight.xcodeproj
 ```
@@ -386,18 +386,18 @@ Select your iPhone as the run destination and press Run. Re-run `xcodegen genera
 
 ## Tests
 
-The DSP, classification-mapping and fusion logic lives in the `EchoCore` Swift package and is tested on the Mac:
+The DSP, classification-mapping and fusion logic lives in the `SoundSightCore` Swift package and is tested on the Mac:
 
 ```sh
-swift test --package-path EchoCore
+swift test --package-path SoundSightCore
 ```
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `EchoCore/` | Pure Swift logic: FOA intensity, direction finding, axis calibration, label mapping, event tracking |
-| `EchoApp/` | iOS app: capture, SoundAnalysis, motion, haptics, SwiftUI, FOA probe |
+| `SoundSightCore/` | Pure Swift logic: FOA intensity, direction finding, axis calibration, label mapping, event tracking |
+| `SoundSightApp/` | iOS app: capture, SoundAnalysis, motion, haptics, SwiftUI, FOA probe |
 | `docs/superpowers/` | Spec, spike results and implementation plans |
 ````
 
@@ -408,14 +408,14 @@ Expected: `⚙️  Generating plists...` / `Created project at …`, then the bu
 
 - [ ] **Step 9: Human check: install on the iPhone**
 
-Ask the human to `cp EchoApp/Config/Signing.xcconfig.example EchoApp/Config/Signing.xcconfig`, set their team ID, run `xcodegen generate`, open `SoundSight.xcodeproj`, and Run on the iPhone 16 Pro Max.
+Ask the human to `cp SoundSightApp/Config/Signing.xcconfig.example SoundSightApp/Config/Signing.xcconfig`, set their team ID, run `xcodegen generate`, open `SoundSight.xcodeproj`, and Run on the iPhone 16 Pro Max.
 Expected: the app launches and shows "SoundSight". Wait for confirmation before committing.
 
 - [ ] **Step 10: Commit**
 
 ```bash
-git add project.yml .gitignore README.md EchoApp EchoCore
-git commit -m "Scaffold SoundSight iOS app and EchoCore package" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git add project.yml .gitignore README.md SoundSightApp SoundSightCore
+git commit -m "Scaffold SoundSight iOS app and SoundSightCore package" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
 ---
@@ -423,8 +423,8 @@ git commit -m "Scaffold SoundSight iOS app and EchoCore package" -m "Co-Authored
 ### Task 2: FOA windows, PCM conversion and window accumulation
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/Audio/FOAWindow.swift`, `EchoCore/Sources/EchoCore/Audio/PCMDeinterleaver.swift`, `EchoCore/Sources/EchoCore/Audio/WindowAccumulator.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/AudioTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/Audio/FOAWindow.swift`, `SoundSightCore/Sources/SoundSightCore/Audio/PCMDeinterleaver.swift`, `SoundSightCore/Sources/SoundSightCore/Audio/WindowAccumulator.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/AudioTests.swift`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -436,11 +436,11 @@ git commit -m "Scaffold SoundSight iOS app and EchoCore package" -m "Co-Authored
 
 - [ ] **Step 1: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/AudioTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/AudioTests.swift`:
 
 ```swift
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct PCMDeinterleaverTests {
     @Test func interleavedInt16() {
@@ -523,12 +523,12 @@ struct WindowAccumulatorTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'PCMDeinterleaver' in scope` and `cannot find 'WindowAccumulator' in scope`.
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/Audio/FOAWindow.swift`:
+`SoundSightCore/Sources/SoundSightCore/Audio/FOAWindow.swift`:
 
 ```swift
 /// One analysis window of First-Order Ambisonics audio. Channels are the raw FOA
@@ -553,7 +553,7 @@ public struct FOAWindow: Sendable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Audio/PCMDeinterleaver.swift`:
+`SoundSightCore/Sources/SoundSightCore/Audio/PCMDeinterleaver.swift`:
 
 ```swift
 /// Describes linear PCM as delivered by Core Audio.
@@ -607,7 +607,7 @@ public enum PCMDeinterleaver {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Audio/WindowAccumulator.swift`:
+`SoundSightCore/Sources/SoundSightCore/Audio/WindowAccumulator.swift`:
 
 ```swift
 /// Buffers incoming FOA chunks and emits fixed-length overlapping windows whose
@@ -667,13 +667,13 @@ public struct WindowAccumulator: Sendable {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 14 tests in 3 suites passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add FOA windows, PCM deinterleaving and window accumulation" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -682,9 +682,9 @@ git commit -m "Add FOA windows, PCM deinterleaving and window accumulation" -m "
 ### Task 3: FOA intensity analysis and synthetic FOA test signals
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/DSP/IntensityAnalyzer.swift`
-- Create (test support): `EchoCore/Tests/EchoCoreTests/Support/FOASynth.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/IntensityAnalyzerTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/DSP/IntensityAnalyzer.swift`
+- Create (test support): `SoundSightCore/Tests/SoundSightCoreTests/Support/FOASynth.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/IntensityAnalyzerTests.swift`
 
 **Interfaces:**
 - Consumes: `FOAWindow` (Task 2), `Circular` (Task 1).
@@ -699,11 +699,11 @@ The math (spec §3.3): for SN3D first order, a plane wave from unit direction **
 
 - [ ] **Step 1: Write the test support and failing tests**
 
-`EchoCore/Tests/EchoCoreTests/Support/FOASynth.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/Support/FOASynth.swift`:
 
 ```swift
 import Foundation
-@testable import EchoCore
+@testable import SoundSightCore
 
 /// Deterministic SplitMix64 generator so synthetic tests are reproducible.
 struct SeededRNG: RandomNumberGenerator {
@@ -768,11 +768,11 @@ enum FOASynth {
 }
 ```
 
-`EchoCore/Tests/EchoCoreTests/IntensityAnalyzerTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/IntensityAnalyzerTests.swift`:
 
 ```swift
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct IntensityAnalyzerTests {
     let analyzer = try! IntensityAnalyzer()
@@ -816,12 +816,12 @@ struct IntensityAnalyzerTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'IntensityAnalyzer' in scope`.
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/DSP/IntensityAnalyzer.swift`:
+`SoundSightCore/Sources/SoundSightCore/DSP/IntensityAnalyzer.swift`:
 
 ```swift
 import Accelerate
@@ -916,13 +916,13 @@ public final class IntensityAnalyzer {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 19 tests in 4 suites passed` (the synthetic tests take a few seconds in debug builds).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add FOA active-intensity analysis with synthetic signal tests" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -931,8 +931,8 @@ git commit -m "Add FOA active-intensity analysis with synthetic signal tests" -m
 ### Task 4: FOA axis calibration and the probe fitter
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/DSP/FOAAxisCalibration.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/CalibrationTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/DSP/FOAAxisCalibration.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/CalibrationTests.swift`
 
 **Interfaces:**
 - Consumes: `Circular` (Task 1), `SeededRNG` (Task 3 test support).
@@ -946,13 +946,13 @@ Why only 24 candidates: the mapping from FOA axes to device axes is a rotation m
 
 - [ ] **Step 1: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/CalibrationTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/CalibrationTests.swift`:
 
 ```swift
 import Foundation
 import Testing
 import simd
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct CalibrationTests {
     @Test func twentyFourProperPermutations() {
@@ -1023,12 +1023,12 @@ struct CalibrationTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'FOAAxisCalibration' in scope`.
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/DSP/FOAAxisCalibration.swift`:
+`SoundSightCore/Sources/SoundSightCore/DSP/FOAAxisCalibration.swift`:
 
 ```swift
 import simd
@@ -1131,13 +1131,13 @@ public enum CalibrationFitter {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 26 tests in 5 suites passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add FOA axis calibration and brute-force probe fitter" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -1148,11 +1148,11 @@ git commit -m "Add FOA axis calibration and brute-force probe fitter" -m "Co-Aut
 The first on-device code. It captures FOA, shows live per-channel levels and a raw direction dial, records calibration samples at known angles, fits the axis mapping, and exports CSV. Some files written here are replaced in Task 13 (`AppModel`, `AudioPipeline`) and Task 14 (`MainView`); that is intentional.
 
 **Files:**
-- Create: `EchoApp/Capture/FOABufferAdapter.swift`, `EchoApp/Capture/FOACaptureSession.swift`, `EchoApp/Capture/AudioPipeline.swift`
-- Create: `EchoApp/Probe/ProbeState.swift`, `EchoApp/Probe/ProbeView.swift`
-- Create: `EchoApp/UI/StatusBanner.swift`, `EchoApp/UI/RadarGeometry.swift`, `EchoApp/UI/MainView.swift`
-- Create: `EchoApp/App/AppModel.swift`
-- Modify: `EchoApp/App/SoundSightApp.swift` (replace)
+- Create: `SoundSightApp/Capture/FOABufferAdapter.swift`, `SoundSightApp/Capture/FOACaptureSession.swift`, `SoundSightApp/Capture/AudioPipeline.swift`
+- Create: `SoundSightApp/Probe/ProbeState.swift`, `SoundSightApp/Probe/ProbeView.swift`
+- Create: `SoundSightApp/UI/StatusBanner.swift`, `SoundSightApp/UI/RadarGeometry.swift`, `SoundSightApp/UI/MainView.swift`
+- Create: `SoundSightApp/App/AppModel.swift`
+- Modify: `SoundSightApp/App/SoundSightApp.swift` (replace)
 
 **Interfaces:**
 - Consumes: `PCMLayout`, `PCMDeinterleaver`, `WindowAccumulator`, `IntensityAnalyzer`, `FOAAxisCalibration`, `CalibrationSample`, `CalibrationFit`, `CalibrationFitter`, `Circular`.
@@ -1166,11 +1166,11 @@ The first on-device code. It captures FOA, shows live per-channel levels and a r
 
 - [ ] **Step 1: Write the capture layer**
 
-`EchoApp/Capture/FOABufferAdapter.swift`:
+`SoundSightApp/Capture/FOABufferAdapter.swift`:
 
 ```swift
 import AVFoundation
-import EchoCore
+import SoundSightCore
 
 /// One delivered buffer of FOA audio, split into raw ambisonic channels.
 struct FOAChunk: Sendable {
@@ -1230,7 +1230,7 @@ enum FOABufferAdapter {
 }
 ```
 
-`EchoApp/Capture/FOACaptureSession.swift`:
+`SoundSightApp/Capture/FOACaptureSession.swift`:
 
 ```swift
 import AVFoundation
@@ -1253,8 +1253,8 @@ enum CaptureError: LocalizedError {
 final class FOACaptureSession: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
     private let output = AVCaptureAudioDataOutput()
-    private let sessionQueue = DispatchQueue(label: "echo.capture.session")
-    private let bufferQueue = DispatchQueue(label: "echo.capture.buffers")
+    private let sessionQueue = DispatchQueue(label: "soundsight.capture.session")
+    private let bufferQueue = DispatchQueue(label: "soundsight.capture.buffers")
     private var configured = false
     /// False when the device can't capture FOA and the session fell back to mono.
     private(set) var foaEnabled = false
@@ -1302,10 +1302,10 @@ final class FOACaptureSession: NSObject, AVCaptureAudioDataOutputSampleBufferDel
 }
 ```
 
-`EchoApp/Capture/AudioPipeline.swift` (probe stage):
+`SoundSightApp/Capture/AudioPipeline.swift` (probe stage):
 
 ```swift
-import EchoCore
+import SoundSightCore
 import Foundation
 import os
 import simd
@@ -1321,7 +1321,7 @@ struct WindowSummary: Sendable {
 /// Probe-stage pipeline: chunk → 1 s windows → FOA intensity, on one serial queue.
 /// Task 13 replaces this with the full classification + DOA + tracking pipeline.
 final class AudioPipeline: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "echo.pipeline")
+    private let queue = DispatchQueue(label: "soundsight.pipeline")
     private let analyzer: IntensityAnalyzer
     private var sampleRate: Double = 0
     private var accumulator: WindowAccumulator?
@@ -1368,10 +1368,10 @@ final class AudioPipeline: @unchecked Sendable {
 
 - [ ] **Step 2: Write the probe state and screens**
 
-`EchoApp/Probe/ProbeState.swift`:
+`SoundSightApp/Probe/ProbeState.swift`:
 
 ```swift
-import EchoCore
+import SoundSightCore
 import Foundation
 import simd
 
@@ -1430,10 +1430,10 @@ struct ProbeState {
 }
 ```
 
-`EchoApp/Probe/ProbeView.swift`:
+`SoundSightApp/Probe/ProbeView.swift`:
 
 ```swift
-import EchoCore
+import SoundSightCore
 import SwiftUI
 
 /// Debug screen for the step 1 FOA gate (spec §6).
@@ -1520,7 +1520,7 @@ struct ProbeDial: View {
 }
 ```
 
-`EchoApp/UI/RadarGeometry.swift`:
+`SoundSightApp/UI/RadarGeometry.swift`:
 
 ```swift
 import SwiftUI
@@ -1532,7 +1532,7 @@ func radarPoint(_ center: CGPoint, _ radius: CGFloat, _ degrees: Double) -> CGPo
 }
 ```
 
-`EchoApp/UI/StatusBanner.swift`:
+`SoundSightApp/UI/StatusBanner.swift`:
 
 ```swift
 import SwiftUI
@@ -1584,11 +1584,11 @@ struct StatusBanner: View {
 
 - [ ] **Step 3: Write the probe-stage model, main screen and app entry**
 
-`EchoApp/App/AppModel.swift`:
+`SoundSightApp/App/AppModel.swift`:
 
 ```swift
 import AVFoundation
-import EchoCore
+import SoundSightCore
 import Observation
 import SwiftUI
 
@@ -1709,7 +1709,7 @@ final class AppModel {
 }
 ```
 
-`EchoApp/UI/MainView.swift`:
+`SoundSightApp/UI/MainView.swift`:
 
 ```swift
 import SwiftUI
@@ -1741,7 +1741,7 @@ struct MainView: View {
 }
 ```
 
-`EchoApp/App/SoundSightApp.swift` (replace):
+`SoundSightApp/App/SoundSightApp.swift` (replace):
 
 ```swift
 import SwiftUI
@@ -1763,7 +1763,7 @@ Expected: no `error:` lines. Swift 6 concurrency warnings must also be zero; fix
 
 - [ ] **Step 5: Run core tests (no regressions)**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 26 tests in 5 suites passed`.
 
 - [ ] **Step 6: Human check on the iPhone**
@@ -1777,7 +1777,7 @@ Wait for the report before committing.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add EchoApp
+git add SoundSightApp
 git commit -m "Add FOA capture and on-device probe with calibration recorder" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -1822,8 +1822,8 @@ git commit -m "Record FOA probe gate results" -m "Co-Authored-By: Claude Opus 5.
 ### Task 7: Direction-of-arrival estimator
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/DSP/DOAEstimator.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/DOAEstimatorTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/DSP/DOAEstimator.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/DOAEstimatorTests.swift`
 
 **Interfaces:**
 - Consumes: `IntensityAnalyzer`, `IntensityResult`, `IntensityConfig` (Task 3); `FOAAxisCalibration` (Task 4); `FOAWindow` (Task 2); `Circular`; test helpers `FOASynth`, `SeededRNG`.
@@ -1836,12 +1836,12 @@ git commit -m "Record FOA probe gate results" -m "Co-Authored-By: Claude Opus 5.
 
 - [ ] **Step 1: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/DOAEstimatorTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/DOAEstimatorTests.swift`:
 
 ```swift
 import Testing
 import simd
-@testable import EchoCore
+@testable import SoundSightCore
 
 /// deviceToWorld for a phone lying flat, turned clockwise (seen from above) by `degrees`.
 func yawRotation(clockwise degrees: Double) -> simd_float3x3 {
@@ -1934,12 +1934,12 @@ struct DOAEstimatorTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'DOAEstimator' in scope`.
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/DSP/DOAEstimator.swift`:
+`SoundSightCore/Sources/SoundSightCore/DSP/DOAEstimator.swift`:
 
 ```swift
 import simd
@@ -2040,13 +2040,13 @@ public final class DOAEstimator {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 34 tests in 6 suites passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add world-frame FOA direction-of-arrival estimator" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -2055,10 +2055,10 @@ git commit -m "Add world-frame FOA direction-of-arrival estimator" -m "Co-Author
 ### Task 8: Classification tables (urgency, label mapping, thresholds)
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/Classification/Urgency.swift`, `UrgencyMap.swift`, `LabelMapper.swift`, `GroupThresholds.swift`, `ClassificationResources.swift`
-- Create (resources): `EchoCore/Sources/EchoCore/Resources/apple_to_group.json`, `thresholds.json` (copied from the spike), `urgency_map.json` (hand-written)
-- Modify: `EchoCore/Package.swift` (declare resources)
-- Test: `EchoCore/Tests/EchoCoreTests/ClassificationTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/Classification/Urgency.swift`, `UrgencyMap.swift`, `LabelMapper.swift`, `GroupThresholds.swift`, `ClassificationResources.swift`
+- Create (resources): `SoundSightCore/Sources/SoundSightCore/Resources/apple_to_group.json`, `thresholds.json` (copied from the spike), `urgency_map.json` (hand-written)
+- Modify: `SoundSightCore/Package.swift` (declare resources)
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/ClassificationTests.swift`
 
 **Interfaces:**
 - Consumes: nothing new.
@@ -2073,42 +2073,42 @@ git commit -m "Add world-frame FOA direction-of-arrival estimator" -m "Co-Author
 - [ ] **Step 1: Add the resource files**
 
 ```bash
-mkdir -p EchoCore/Sources/EchoCore/Resources
-cp docs/superpowers/spikes/2026-10-10-classifier/apple_to_group.json EchoCore/Sources/EchoCore/Resources/
-cp docs/superpowers/spikes/2026-10-10-classifier/thresholds.json EchoCore/Sources/EchoCore/Resources/
+mkdir -p SoundSightCore/Sources/SoundSightCore/Resources
+cp docs/superpowers/spikes/2026-10-10-classifier/apple_to_group.json SoundSightCore/Sources/SoundSightCore/Resources/
+cp docs/superpowers/spikes/2026-10-10-classifier/thresholds.json SoundSightCore/Sources/SoundSightCore/Resources/
 curl -sL https://example.com/urgency_map.json \
-  -o EchoCore/Sources/EchoCore/Resources/urgency_map.json
-python3 -c "import json; d=json.load(open('EchoCore/Sources/EchoCore/Resources/urgency_map.json')); print(sum(len(v) for k,v in d.items() if not k.startswith('_')))"
+  -o SoundSightCore/Sources/SoundSightCore/Resources/urgency_map.json
+python3 -c "import json; d=json.load(open('SoundSightCore/Sources/SoundSightCore/Resources/urgency_map.json')); print(sum(len(v) for k,v in d.items() if not k.startswith('_')))"
 ```
 Expected: the last command prints `42`. If the download fails, copy `urgency_map.json` from the team's notes.
 
 - [ ] **Step 2: Declare the resources**
 
-`EchoCore/Package.swift` (replace):
+`SoundSightCore/Package.swift` (replace):
 
 ```swift
 // swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
-    name: "EchoCore",
+    name: "SoundSightCore",
     platforms: [.iOS(.v26), .macOS(.v15)],
-    products: [.library(name: "EchoCore", targets: ["EchoCore"])],
+    products: [.library(name: "SoundSightCore", targets: ["SoundSightCore"])],
     targets: [
-        .target(name: "EchoCore", resources: [.process("Resources")]),
-        .testTarget(name: "EchoCoreTests", dependencies: ["EchoCore"]),
+        .target(name: "SoundSightCore", resources: [.process("Resources")]),
+        .testTarget(name: "SoundSightCoreTests", dependencies: ["SoundSightCore"]),
     ]
 )
 ```
 
 - [ ] **Step 3: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/ClassificationTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/ClassificationTests.swift`:
 
 ```swift
 import Foundation
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct ClassificationTests {
     @Test func urgencyOrderingAndParsing() {
@@ -2157,12 +2157,12 @@ struct ClassificationTests {
 
 - [ ] **Step 4: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'LabelMapper' in scope` (and the other new types).
 
 - [ ] **Step 5: Implement**
 
-`EchoCore/Sources/EchoCore/Classification/Urgency.swift`:
+`SoundSightCore/Sources/SoundSightCore/Classification/Urgency.swift`:
 
 ```swift
 /// Four urgency tiers, ordered from least to most urgent.
@@ -2183,7 +2183,7 @@ public enum Urgency: Int, Comparable, Sendable, CaseIterable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Classification/UrgencyMap.swift`:
+`SoundSightCore/Sources/SoundSightCore/Classification/UrgencyMap.swift`:
 
 ```swift
 import Foundation
@@ -2221,7 +2221,7 @@ public struct UrgencyMap: Sendable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Classification/LabelMapper.swift`:
+`SoundSightCore/Sources/SoundSightCore/Classification/LabelMapper.swift`:
 
 ```swift
 import Foundation
@@ -2259,7 +2259,7 @@ public struct LabelMapper: Sendable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Classification/GroupThresholds.swift`:
+`SoundSightCore/Sources/SoundSightCore/Classification/GroupThresholds.swift`:
 
 ```swift
 import Foundation
@@ -2291,7 +2291,7 @@ public struct GroupThresholds: Sendable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Classification/ClassificationResources.swift`:
+`SoundSightCore/Sources/SoundSightCore/Classification/ClassificationResources.swift`:
 
 ```swift
 import Foundation
@@ -2319,13 +2319,13 @@ public struct ClassificationResources: Sendable {
 
 - [ ] **Step 6: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 39 tests in 7 suites passed`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add classification tables: urgency, noisy-OR label mapping, thresholds" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -2334,8 +2334,8 @@ git commit -m "Add classification tables: urgency, noisy-OR label mapping, thres
 ### Task 9: Window joiner (classification ↔ direction)
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/Classification/WindowJoiner.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/WindowJoinerTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/Classification/WindowJoiner.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/WindowJoinerTests.swift`
 
 **Interfaces:**
 - Consumes: `DOAFrame` (Task 7).
@@ -2346,11 +2346,11 @@ git commit -m "Add classification tables: urgency, noisy-OR label mapping, thres
 
 - [ ] **Step 1: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/WindowJoinerTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/WindowJoinerTests.swift`:
 
 ```swift
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct WindowJoinerTests {
     func doa(_ start: Int64) -> DOAFrame { DOAFrame(windowStart: start, peaks: [], diffuseness: 0, histogram: []) }
@@ -2407,12 +2407,12 @@ struct WindowJoinerTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'WindowJoiner' in scope`.
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/Classification/WindowJoiner.swift`:
+`SoundSightCore/Sources/SoundSightCore/Classification/WindowJoiner.swift`:
 
 ```swift
 /// Group scores for one classifier window.
@@ -2495,13 +2495,13 @@ public struct WindowJoiner: Sendable {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 44 tests in 8 suites passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add window joiner pairing classifier and DOA frames" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -2510,8 +2510,8 @@ git commit -m "Add window joiner pairing classifier and DOA frames" -m "Co-Autho
 ### Task 10: Motion conventions and forward heading
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/Motion/RotationConvention.swift`, `EchoCore/Sources/EchoCore/Motion/ForwardHeading.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/MotionTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/Motion/RotationConvention.swift`, `SoundSightCore/Sources/SoundSightCore/Motion/ForwardHeading.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/MotionTests.swift`
 
 **Interfaces:**
 - Consumes: `Circular`; test helper `yawRotation(clockwise:)` (Task 7 test file).
@@ -2524,12 +2524,12 @@ Why a runtime convention check: the CoreMotion header only says `rotationMatrix`
 
 - [ ] **Step 1: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/MotionTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/MotionTests.swift`:
 
 ```swift
 import Testing
 import simd
-@testable import EchoCore
+@testable import SoundSightCore
 
 /// deviceToWorld for a phone tilted up about its x axis by `degrees` (0 = flat, 90 = upright portrait).
 func tilt(_ degrees: Double) -> simd_float3x3 {
@@ -2612,12 +2612,12 @@ struct ForwardHeadingTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'RotationConvention' in scope` and `cannot find 'ForwardHeading' in scope`.
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/Motion/RotationConvention.swift`:
+`SoundSightCore/Sources/SoundSightCore/Motion/RotationConvention.swift`:
 
 ```swift
 import simd
@@ -2655,7 +2655,7 @@ public enum RotationConvention: Sendable, Equatable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Motion/ForwardHeading.swift`:
+`SoundSightCore/Sources/SoundSightCore/Motion/ForwardHeading.swift`:
 
 ```swift
 import Foundation
@@ -2692,13 +2692,13 @@ public struct ForwardHeading: Sendable {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 52 tests in 10 suites passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add rotation-convention resolution and forward heading" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -2707,8 +2707,8 @@ git commit -m "Add rotation-convention resolution and forward heading" -m "Co-Au
 ### Task 11: Azimuth belief and event tracker
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/Fusion/AzimuthBelief.swift`, `EchoCore/Sources/EchoCore/Fusion/EventTracker.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/FusionTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/Fusion/AzimuthBelief.swift`, `SoundSightCore/Sources/SoundSightCore/Fusion/EventTracker.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/FusionTests.swift`
 
 **Interfaces:**
 - Consumes: `DOAPeak`, `DOAFrame` (Task 7); `Urgency`, `UrgencyMap` (Task 8); `Circular`.
@@ -2719,11 +2719,11 @@ git commit -m "Add rotation-convention resolution and forward heading" -m "Co-Au
 
 - [ ] **Step 1: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/FusionTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/FusionTests.swift`:
 
 ```swift
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct AzimuthBeliefTests {
     @Test func startsUniform() {
@@ -2819,12 +2819,12 @@ struct EventTrackerTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'AzimuthBelief' in scope` and `cannot find 'EventTracker' in scope`.
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/Fusion/AzimuthBelief.swift`:
+`SoundSightCore/Sources/SoundSightCore/Fusion/AzimuthBelief.swift`:
 
 ```swift
 import Foundation
@@ -2885,7 +2885,7 @@ public struct AzimuthBelief: Sendable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Fusion/EventTracker.swift`:
+`SoundSightCore/Sources/SoundSightCore/Fusion/EventTracker.swift`:
 
 ```swift
 import Foundation
@@ -2956,13 +2956,13 @@ public final class EventTracker {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 63 tests in 12 suites passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add per-label azimuth belief and event tracker" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -2971,8 +2971,8 @@ git commit -m "Add per-label azimuth belief and event tracker" -m "Co-Authored-B
 ### Task 12: Alert rules (haptic gate, VoiceOver phrases)
 
 **Files:**
-- Create: `EchoCore/Sources/EchoCore/Alerts/HapticGate.swift`, `EchoCore/Sources/EchoCore/Alerts/DirectionPhrase.swift`
-- Test: `EchoCore/Tests/EchoCoreTests/AlertTests.swift`
+- Create: `SoundSightCore/Sources/SoundSightCore/Alerts/HapticGate.swift`, `SoundSightCore/Sources/SoundSightCore/Alerts/DirectionPhrase.swift`
+- Test: `SoundSightCore/Tests/SoundSightCoreTests/AlertTests.swift`
 
 **Interfaces:**
 - Consumes: `Urgency` (Task 8), `Circular`.
@@ -2982,11 +2982,11 @@ Note: the spec's example phrase "behind you, to the left (4 o'clock)" mixes up s
 
 - [ ] **Step 1: Write the failing tests**
 
-`EchoCore/Tests/EchoCoreTests/AlertTests.swift`:
+`SoundSightCore/Tests/SoundSightCoreTests/AlertTests.swift`:
 
 ```swift
 import Testing
-@testable import EchoCore
+@testable import SoundSightCore
 
 struct AlertTests {
     @Test func hapticGateCooldownAndTiers() {
@@ -3013,12 +3013,12 @@ struct AlertTests {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: build FAILS with `cannot find 'HapticGate' in scope` and `cannot find 'DirectionPhrase' in scope`.
 
 - [ ] **Step 3: Implement**
 
-`EchoCore/Sources/EchoCore/Alerts/HapticGate.swift`:
+`SoundSightCore/Sources/SoundSightCore/Alerts/HapticGate.swift`:
 
 ```swift
 /// Decides when an event may buzz: MEDIUM and above only, at most once per group per cooldown.
@@ -3037,7 +3037,7 @@ public struct HapticGate: Sendable {
 }
 ```
 
-`EchoCore/Sources/EchoCore/Alerts/DirectionPhrase.swift`:
+`SoundSightCore/Sources/SoundSightCore/Alerts/DirectionPhrase.swift`:
 
 ```swift
 /// Spoken description of a radar angle for VoiceOver (spec §3.6), e.g. "behind you to the right (4 o'clock)".
@@ -3066,13 +3066,13 @@ public enum DirectionPhrase {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `swift test --package-path EchoCore`
+Run: `swift test --package-path SoundSightCore`
 Expected: `Test run with 65 tests in 13 suites passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoCore
+git add SoundSightCore
 git commit -m "Add haptic gate and VoiceOver direction phrases" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -3081,11 +3081,11 @@ git commit -m "Add haptic gate and VoiceOver direction phrases" -m "Co-Authored-
 ### Task 13: Wire classification, direction, motion and haptics end to end
 
 **Files:**
-- Create: `EchoApp/Classification/SoundAnalysisClassifier.swift`, `EchoApp/Motion/MotionProvider.swift`, `EchoApp/Haptics/HapticsManager.swift`, `EchoApp/UI/UrgencyStyle.swift`, `EchoApp/UI/EventListView.swift`
-- Modify (replace): `EchoApp/Capture/AudioPipeline.swift`, `EchoApp/App/AppModel.swift`, `EchoApp/UI/MainView.swift`
+- Create: `SoundSightApp/Classification/SoundAnalysisClassifier.swift`, `SoundSightApp/Motion/MotionProvider.swift`, `SoundSightApp/Haptics/HapticsManager.swift`, `SoundSightApp/UI/UrgencyStyle.swift`, `SoundSightApp/UI/EventListView.swift`
+- Modify (replace): `SoundSightApp/Capture/AudioPipeline.swift`, `SoundSightApp/App/AppModel.swift`, `SoundSightApp/UI/MainView.swift`
 
 **Interfaces:**
-- Consumes: everything in EchoCore; `FOAChunk`, `FOACaptureSession`, `ProbeState`, `StatusBanner`, `ProbeView` (Task 5).
+- Consumes: everything in SoundSightCore; `FOAChunk`, `FOACaptureSession`, `ProbeState`, `StatusBanner`, `ProbeView` (Task 5).
 - Produces (used by Task 14):
   - `struct EventDisplay: Identifiable, Equatable { group, urgency, confidence, worldBearing: Double?, concentration, belief: [Double]; static let minConcentration = 0.5 }`.
   - `AppModel.events: [EventDisplay]`, `AppModel.forwardBearing: Double`, `AppModel.isListening`, `AppModel.status`, `AppModel.classifierWarning`.
@@ -3096,11 +3096,11 @@ git commit -m "Add haptic gate and VoiceOver direction phrases" -m "Co-Authored-
 
 - [ ] **Step 1: Write the app services**
 
-`EchoApp/Classification/SoundAnalysisClassifier.swift`:
+`SoundSightApp/Classification/SoundAnalysisClassifier.swift`:
 
 ```swift
 import AVFoundation
-import EchoCore
+import SoundSightCore
 import SoundAnalysis
 
 /// A classifier fed mono audio that reports sound group scores per window (spec §3.2).
@@ -3161,11 +3161,11 @@ final class SoundAnalysisClassifier: NSObject, SoundClassifier, SNResultsObservi
 }
 ```
 
-`EchoApp/Motion/MotionProvider.swift`:
+`SoundSightApp/Motion/MotionProvider.swift`:
 
 ```swift
 import CoreMotion
-import EchoCore
+import SoundSightCore
 import os
 import simd
 
@@ -3226,11 +3226,11 @@ final class MotionProvider {
 }
 ```
 
-`EchoApp/Haptics/HapticsManager.swift`:
+`SoundSightApp/Haptics/HapticsManager.swift`:
 
 ```swift
 import CoreHaptics
-import EchoCore
+import SoundSightCore
 
 /// Urgency-tiered Core Haptics patterns with a per-group cooldown (spec §3.7).
 @MainActor
@@ -3274,10 +3274,10 @@ final class HapticsManager {
 
 - [ ] **Step 2: Replace the pipeline and the model**
 
-`EchoApp/Capture/AudioPipeline.swift` (replace):
+`SoundSightApp/Capture/AudioPipeline.swift` (replace):
 
 ```swift
-import EchoCore
+import SoundSightCore
 import Foundation
 import os
 import simd
@@ -3299,7 +3299,7 @@ struct TrackerOutput: Sendable {
 
 /// Chunk → SoundAnalysis + 1 s windows → DOA → joiner → EventTracker, all on one serial queue (spec §3).
 final class AudioPipeline: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "echo.pipeline")
+    private let queue = DispatchQueue(label: "soundsight.pipeline")
     private let resources: ClassificationResources
     private let estimator: DOAEstimator
     private let tracker: EventTracker
@@ -3390,11 +3390,11 @@ final class AudioPipeline: @unchecked Sendable {
 }
 ```
 
-`EchoApp/App/AppModel.swift` (replace):
+`SoundSightApp/App/AppModel.swift` (replace):
 
 ```swift
 import AVFoundation
-import EchoCore
+import SoundSightCore
 import Observation
 import SwiftUI
 
@@ -3567,10 +3567,10 @@ final class AppModel {
 
 - [ ] **Step 3: Add the event list**
 
-`EchoApp/UI/UrgencyStyle.swift`:
+`SoundSightApp/UI/UrgencyStyle.swift`:
 
 ```swift
-import EchoCore
+import SoundSightCore
 import SwiftUI
 
 extension Urgency {
@@ -3595,10 +3595,10 @@ extension Urgency {
 }
 ```
 
-`EchoApp/UI/EventListView.swift`:
+`SoundSightApp/UI/EventListView.swift`:
 
 ```swift
-import EchoCore
+import SoundSightCore
 import SwiftUI
 
 struct EventListView: View {
@@ -3645,7 +3645,7 @@ struct EventListView: View {
 }
 ```
 
-`EchoApp/UI/MainView.swift` (replace):
+`SoundSightApp/UI/MainView.swift` (replace):
 
 ```swift
 import SwiftUI
@@ -3691,7 +3691,7 @@ struct MainView: View {
 
 - [ ] **Step 4: Build and run core tests**
 
-Run: `xcodegen generate && xcodebuild -project SoundSight.xcodeproj -scheme SoundSight -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build -quiet && swift test --package-path EchoCore`
+Run: `xcodegen generate && xcodebuild -project SoundSight.xcodeproj -scheme SoundSight -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build -quiet && swift test --package-path SoundSightCore`
 Expected: no `error:` or concurrency warnings; `Test run with 65 tests in 13 suites passed`.
 
 - [ ] **Step 5: Human check on the iPhone**
@@ -3706,7 +3706,7 @@ Wait for the report before committing. If no rows ever appear, check the probe's
 - [ ] **Step 6: Commit**
 
 ```bash
-git add EchoApp
+git add SoundSightApp
 git commit -m "Wire SoundAnalysis, DOA, motion and haptics into the live pipeline" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -3715,21 +3715,21 @@ git commit -m "Wire SoundAnalysis, DOA, motion and haptics into the live pipelin
 ### Task 14: 360° radar and final main screen
 
 **Files:**
-- Create: `EchoApp/UI/RadarView.swift`
-- Modify (replace): `EchoApp/UI/MainView.swift`
+- Create: `SoundSightApp/UI/RadarView.swift`
+- Modify (replace): `SoundSightApp/UI/MainView.swift`
 
 **Interfaces:**
-- Consumes: `EventDisplay`, `AppModel.forwardBearing` (Task 13); `radarPoint` (Task 5); `ForwardHeading.radarAngle`, `AzimuthBelief.binCenter/binWidth`, `DirectionPhrase` (EchoCore); `Urgency.color/label` (Task 13).
+- Consumes: `EventDisplay`, `AppModel.forwardBearing` (Task 13); `radarPoint` (Task 5); `ForwardHeading.radarAngle`, `AzimuthBelief.binCenter/binWidth`, `DirectionPhrase` (SoundSightCore); `Urgency.color/label` (Task 13).
 - Produces: `RadarView(events:forward:isListening:)`; the final `MainView`.
 
 The radar redraws at display rate through `TimelineView(.animation)`. Every belief bin and arrow is drawn at `ForwardHeading.radarAngle(worldBearing:forward:)`, so turning the phone counter-rotates the picture and sources stay put in the world.
 
 - [ ] **Step 1: Write the radar**
 
-`EchoApp/UI/RadarView.swift`:
+`SoundSightApp/UI/RadarView.swift`:
 
 ```swift
-import EchoCore
+import SoundSightCore
 import SwiftUI
 
 /// 360° radar: belief halos, peak arrows and labels, counter-rotated by the forward heading (spec §3.6).
@@ -3803,7 +3803,7 @@ struct RadarView: View {
 
 - [ ] **Step 2: Replace the main screen**
 
-`EchoApp/UI/MainView.swift` (replace):
+`SoundSightApp/UI/MainView.swift` (replace):
 
 ```swift
 import SwiftUI
@@ -3867,7 +3867,7 @@ If criterion 3 fails with the radar spinning the wrong way, ask the human to del
 - [ ] **Step 5: Commit**
 
 ```bash
-git add EchoApp
+git add SoundSightApp
 git commit -m "Add world-anchored 360-degree radar to the main screen" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
@@ -3884,10 +3884,10 @@ Run:
 ```bash
 rm -rf SoundSight.xcodeproj && xcodegen generate
 xcodebuild -project SoundSight.xcodeproj -scheme SoundSight -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO clean build -quiet
-swift test --package-path EchoCore
+swift test --package-path SoundSightCore
 git status --short
 ```
-Expected: build succeeds with no warnings; `Test run with 65 tests in 13 suites passed`; `git status` shows no untracked generated files (`SoundSight.xcodeproj/` and `EchoApp/Info.plist` are ignored).
+Expected: build succeeds with no warnings; `Test run with 65 tests in 13 suites passed`; `git status` shows no untracked generated files (`SoundSight.xcodeproj/` and `SoundSightApp/Info.plist` are ignored).
 
 - [ ] **Step 2: Add usage notes to the README**
 
