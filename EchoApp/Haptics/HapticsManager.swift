@@ -1,12 +1,12 @@
 import CoreHaptics
 import EchoCore
 
-/// Score-tiered Core Haptics patterns with a per-group cooldown (urgency spec §3). Foreground only:
+/// A full-strength burst for every detected sound, longer with urgency, with a per-group cooldown. Foreground only:
 /// Core Haptics doesn't play in the background, where the urgent notification vibrates instead.
 @MainActor
 final class HapticsManager {
     private var engine: CHHapticEngine?
-    private var gate = HapticGate(cooldown: 5)
+    private var gate = HapticGate()
 
     init() {
         guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else { return }
@@ -18,7 +18,7 @@ final class HapticsManager {
     }
 
     /// Clears cooldowns; call when listening restarts (the capture timeline restarts at 0).
-    func reset() { gate = HapticGate(cooldown: 5) }
+    func reset() { gate = HapticGate() }
 
     func alert(group: String, score: Double, now: Double) {
         guard let engine, let pattern = gate.shouldFire(group: group, score: score, now: now),
@@ -27,17 +27,18 @@ final class HapticsManager {
         try? engine.makePlayer(with: haptic).start(atTime: CHHapticTimeImmediate)
     }
 
+    /// A continuous maximum-intensity rumble with sharp maximum-intensity taps on top.
     static func events(for pattern: HapticPattern) -> [CHHapticEvent] {
-        func tap(_ time: TimeInterval, _ intensity: Float, _ sharpness: Float) -> CHHapticEvent {
+        let rumble = CHHapticEvent(eventType: .hapticContinuous, parameters: [
+            CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.4),
+        ], relativeTime: 0, duration: pattern.duration)
+        let taps = pattern.tapTimes.map { time in
             CHHapticEvent(eventType: .hapticTransient, parameters: [
-                CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
-                CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness),
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: 1),
+                CHHapticEventParameter(parameterID: .hapticSharpness, value: 1),
             ], relativeTime: time)
         }
-        return switch pattern {
-        case .triple: [tap(0, 1, 1), tap(0.15, 1, 1), tap(0.30, 1, 1)]
-        case .double: [tap(0, 0.8, 0.7), tap(0.25, 0.8, 0.7)]
-        case .single: [tap(0, 0.5, 0.5)]
-        }
+        return [rumble] + taps
     }
 }

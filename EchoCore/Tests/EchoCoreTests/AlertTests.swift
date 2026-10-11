@@ -2,11 +2,32 @@ import Testing
 @testable import EchoCore
 
 struct AlertTests {
-    @Test func hapticPatternsFollowScore() {
+    @Test func everyDetectedSoundBuzzes() {
         #expect(HapticPattern(score: 0.75) == .triple)
-        #expect(HapticPattern(score: 0.6) == .double)
-        #expect(HapticPattern(score: 0.3) == .single)
-        #expect(HapticPattern(score: 0.29) == nil)
+        #expect(HapticPattern(score: 0.4) == .double)
+        #expect(HapticPattern(score: 0.39) == .single)
+        #expect(HapticPattern(score: 0.01) == .single)
+        #expect(HapticPattern(score: 0) == nil)
+    }
+
+    @Test func burstsAreLongAndStrongerWithUrgency() {
+        #expect(HapticPattern.single.duration == 0.6)
+        #expect(HapticPattern.double.duration == 1.2)
+        #expect(HapticPattern.triple.duration == 2.0)
+        let taps = HapticPattern.triple.tapTimes
+        #expect(taps.first == 0)
+        #expect(taps.count == 20)
+        #expect(taps.allSatisfy { $0 < HapticPattern.triple.duration })
+    }
+
+    @Test func defaultCooldownIsThreeSeconds() {
+        var g = HapticGate()
+        let fired = [
+            g.shouldFire(group: "Siren", score: 0.9, now: 0),
+            g.shouldFire(group: "Siren", score: 0.9, now: 2.9),
+            g.shouldFire(group: "Siren", score: 0.9, now: 3),
+        ]
+        #expect(fired == [.triple, nil, .triple])
     }
 
     @Test func hapticGateCooldown() {
@@ -15,10 +36,10 @@ struct AlertTests {
             g.shouldFire(group: "Speech", score: 0.1, now: 0),
             g.shouldFire(group: "Siren", score: 0.9, now: 0),
             g.shouldFire(group: "Siren", score: 0.9, now: 4.9),
-            g.shouldFire(group: "Dog", score: 0.45, now: 4.9),
+            g.shouldFire(group: "Dog", score: 0.35, now: 4.9),
             g.shouldFire(group: "Siren", score: 0.6, now: 5),
         ]
-        #expect(fired == [nil, .triple, nil, .single, .double])
+        #expect(fired == [.single, .triple, nil, .single, .double])
     }
 
     /// Final review #2: a diluted first window (single tap) must not block the urgent triple for 5 s.

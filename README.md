@@ -77,13 +77,13 @@ Tap **Start Listening**. iOS asks for microphone, motion and notification access
 
 ### Alerts
 
-- **Haptics** (app open), set by score:
+- **Haptics** (app open): every detected sound sets off a full-strength burst (a continuous rumble plus sharp taps every 0.1 s), at most once per sound every 3 s. A sound that becomes more urgent buzzes again straight away. The burst length follows the score:
 
-  | Score | Haptic |
+  | Score | Burst |
   |---|---|
-  | ≥ 0.75 | triple pulse |
-  | ≥ 0.5 | double |
-  | ≥ 0.3 | single |
+  | ≥ 0.75 (urgent) | 2 s |
+  | ≥ 0.4 (moderate) | 1.2 s |
+  | below 0.4 | 0.6 s |
 
 - **Single gunshots:** a 0.15 s bang fills little of the classifier's 1 s window, so with the app open a loud impulse (≥ 20 dB over the room) plus a gunshot-type top label counts at a score of 0.5 instead of 0.84. This caught 18 of 20 test bangs. The locked-phone classifier (YAMNet) doesn't use this rule, because it confuses other loud impulses too often.
 - **VoiceOver** announces urgent sounds with a clock direction, e.g. "behind you to the right (4 o'clock)".
