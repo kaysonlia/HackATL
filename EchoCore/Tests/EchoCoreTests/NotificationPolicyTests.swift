@@ -44,4 +44,14 @@ struct NotificationPolicyTests {
         ]
         #expect(sent == [false, true])
     }
+
+    /// Final review #5: a capture-clock restart must not suppress notifications for the old elapsed time.
+    @Test func policySurvivesClockRestart() {
+        var p = NotificationPolicy()
+        let sent = [
+            p.shouldNotify(group: "Siren", score: 0.9, now: 600, isForeground: false, hits: 2),
+            p.shouldNotify(group: "Siren", score: 0.9, now: 1, isForeground: false, hits: 2),
+        ]
+        #expect(sent == [true, true])
+    }
 }

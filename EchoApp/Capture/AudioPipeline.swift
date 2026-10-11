@@ -141,6 +141,9 @@ final class AudioPipeline: @unchecked Sendable {
     private func setUp(sampleRate: Double) {
         self.sampleRate = sampleRate
         samplesSeen = 0
+        // The capture clock restarts at 0 here (first chunk, or a route/sample-rate change mid-session):
+        // events timed on the old clock would never evict. Alert gates treat the backwards jump as a reset.
+        tracker.reset()
         // A new 1 s window every 0.25 s: sounds are named sooner and Low/Medium ones confirmed in 0.25 s.
         let acc = WindowAccumulator.forSampleRate(sampleRate, hopSeconds: 0.25)
         accumulator = acc
@@ -283,8 +286,11 @@ final class AudioPipeline: @unchecked Sendable {
         for j in joined {
             let now = Double(j.windowStart) / sampleRate
             let handled = handlingTimeline.overlaps(now, now + 1)
-            var active = handled ? [:] : resources.visibility.shown(activeThresholds.active(j.classification.groupScores),
-                                                                    enabled: enabledOptionalGroups)
+            let shown = resources.visibility.shown(activeThresholds.active(j.classification.groupScores),
+                                                   enabled: enabledOptionalGroups)
+            // A window overlapping handling keeps Critical/High sounds (a siren must not vanish because the
+            // phone was bumped); Low/Medium detections there are dropped.
+            var active = handled ? HandlingTimeline.keepDuringHandling(shown, urgencyMap: resources.urgency) : shown
             // Single gunshots: a loud impulse in the window plus a gunshot-type top label (Apple's classifier only).
             if !handled, classifierKind == .apple, active[gunshotAssist.group] == nil,
                let score = j.classification.groupScores[gunshotAssist.group],

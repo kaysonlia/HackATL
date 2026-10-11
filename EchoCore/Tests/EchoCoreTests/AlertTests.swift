@@ -21,6 +21,24 @@ struct AlertTests {
         #expect(fired == [nil, .triple, nil, .single, .double])
     }
 
+    /// Final review #2: a diluted first window (single tap) must not block the urgent triple for 5 s.
+    @Test func strongerPatternBreaksTheCooldown() {
+        var g = HapticGate(cooldown: 5)
+        let fired = [
+            g.shouldFire(group: "Siren", score: 0.35, now: 0),
+            g.shouldFire(group: "Siren", score: 0.85, now: 0.25),
+            g.shouldFire(group: "Siren", score: 0.9, now: 0.5),
+        ]
+        #expect(fired == [.single, .triple, nil])
+    }
+
+    /// Final review #5: the capture clock restarting (route or sample-rate change) must not mute the gate.
+    @Test func hapticGateSurvivesClockRestart() {
+        var g = HapticGate(cooldown: 5)
+        let fired = [g.shouldFire(group: "Siren", score: 0.9, now: 600), g.shouldFire(group: "Siren", score: 0.9, now: 1)]
+        #expect(fired == [.triple, .triple])
+    }
+
     @Test func directionPhrases() {
         #expect(DirectionPhrase.describe(radarAngle: 0) == "in front of you (12 o'clock)")
         #expect(DirectionPhrase.describe(radarAngle: 120) == "behind you to the right (4 o'clock)")

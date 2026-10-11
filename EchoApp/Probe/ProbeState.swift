@@ -73,18 +73,31 @@ struct ProbeState {
 
     /// Debug: Documents/diagnostics.log, readable from the Mac with
     /// `xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier com.hackatl.soundsight`.
+    /// Written on a background queue; past 2 MB the file rotates to diagnostics.old.log (one generation),
+    /// so it stays under ~4 MB however long the app listens.
     static func appendToDiagnosticsFile(_ line: String) {
-        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
-        let url = dir.appendingPathComponent("diagnostics.log")
         let data = Data((line + "\n").utf8)
-        if let handle = try? FileHandle(forWritingTo: url) {
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: data)
-        } else {
-            try? data.write(to: url)
+        diagnosticsQueue.async {
+            guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+            let url = dir.appendingPathComponent("diagnostics.log")
+            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            if size > diagnosticsLimit {
+                let old = dir.appendingPathComponent("diagnostics.old.log")
+                try? FileManager.default.removeItem(at: old)
+                try? FileManager.default.moveItem(at: url, to: old)
+            }
+            if let handle = try? FileHandle(forWritingTo: url) {
+                defer { try? handle.close() }
+                _ = try? handle.seekToEnd()
+                try? handle.write(contentsOf: data)
+            } else {
+                try? data.write(to: url)
+            }
         }
     }
+
+    private static let diagnosticsQueue = DispatchQueue(label: "echo.diagnostics", qos: .utility)
+    private static let diagnosticsLimit = 2_000_000
 
     mutating func clearSamples() {
         samples = []

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import EchoCore
 
@@ -6,6 +7,7 @@ import Testing
 struct HandlingTests {
     @Test func tapsAndBumpsCountAsHandling() {
         var d = HandlingDetector()
+        for _ in 0..<30 { _ = d.update(userAcceleration: SIMD3(0, 0, 0.005)) }  // lying still for 0.5 s
         let flags = [
             d.update(userAcceleration: SIMD3(0, 0, 0.005)),   // phone at rest
             d.update(userAcceleration: SIMD3(0.01, 0, 0.01)),  // slow, smooth turn
@@ -13,6 +15,37 @@ struct HandlingTests {
             d.update(userAcceleration: SIMD3(0.2, 0, 0.1)),    // bump
         ]
         #expect(flags == [false, false, true, true])
+    }
+
+    /// Final review #1: walking (~0.3 g at 2 steps/s) must not count as handling, or every classifier
+    /// window is discarded and a siren while walking never alerts.
+    @Test func walkingIsNotHandling() {
+        var d = HandlingDetector()
+        var flagged = 0
+        for i in 0..<300 {  // 5 s at 60 Hz
+            let a = 0.3 * sin(2 * Double.pi * 2 * Double(i) / 60)
+            if d.update(userAcceleration: SIMD3(0, a, 0.2 * a)) { flagged += 1 }
+        }
+        #expect(flagged == 0)
+    }
+
+    @Test func aHandlingEpisodeEndsAfterASecondAndAHalf() {
+        var d = HandlingDetector()
+        for _ in 0..<30 { _ = d.update(userAcceleration: SIMD3(0, 0, 0)) }
+        var flags: [Bool] = []
+        for i in 0..<150 {  // picked up, then carried
+            let a = 0.3 * sin(2 * Double.pi * 2 * Double(i) / 60) + (i == 0 ? 0.2 : 0)
+            flags.append(d.update(userAcceleration: SIMD3(0, a, 0)))
+        }
+        #expect(flags[0])
+        #expect(!flags[100...].contains(true))
+    }
+
+    @Test func handlingNeverHidesCriticalOrHighSounds() {
+        let urgency = UrgencyMap(tiers: ["Siren": .critical, "Traffic Warning": .high, "Door": .medium, "Speech": .low])
+        let kept = HandlingTimeline.keepDuringHandling(["Siren": 0.9, "Traffic Warning": 0.7, "Door": 0.8, "Speech": 0.6],
+                                                       urgencyMap: urgency)
+        #expect(kept == ["Siren": 0.9, "Traffic Warning": 0.7])
     }
 
     @Test func timelineFlagsOverlappingWindows() {

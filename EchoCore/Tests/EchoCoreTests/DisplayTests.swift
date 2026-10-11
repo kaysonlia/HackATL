@@ -53,6 +53,15 @@ struct DisplayTests {
         #expect(sent == [true, false, true, true, true, true])
     }
 
+    /// Final review #3: an interruption must reach the lock screen even within 1 s of the last update.
+    @Test func pausedChangesBypassTheRateLimit() {
+        var t = LiveActivityThrottle()
+        let a = LiveActivitySnapshot(group: "Siren", score: 0.9, levelDB: 80, radarAngle: 10)
+        var paused = a; paused.paused = true
+        let sent = [t.shouldSend(a, now: 0), t.shouldSend(paused, now: 0.3), t.shouldSend(a, now: 0.5)]
+        #expect(sent == [true, true, true])
+    }
+
     @Test func throttleKeepAlive() {
         var t = LiveActivityThrottle()
         let a = LiveActivitySnapshot(group: nil, score: 0, levelDB: 0, radarAngle: nil)

@@ -28,7 +28,9 @@ public struct LiveActivityThrottle: Sendable {
     /// True if this snapshot should be sent now; records it when so.
     public mutating func shouldSend(_ s: LiveActivitySnapshot, now: Double) -> Bool {
         if let last {
-            guard now - lastTime >= minInterval else { return false }
+            // Paused/resumed must show at once: no more updates may follow an interruption.
+            let pauseChanged = s.paused != last.paused
+            guard pauseChanged || now - lastTime >= minInterval else { return false }
             guard Self.differs(s, last) || now - lastTime >= keepAlive else { return false }
         }
         last = s

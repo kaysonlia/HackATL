@@ -12,7 +12,16 @@ final class LiveActivityController {
     /// Called with a message when the bar can't be shown, or nil once it is.
     var onProblem: ((String?) -> Void)?
 
+    /// Ends bars left over from an earlier run (crash, memory kill) so none claims "Listening…" falsely.
+    static func endLeftovers() {
+        for activity in Activity<EchoActivityAttributes>.activities {
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+        }
+    }
+
     func start() {
+        Self.endLeftovers()
+        activity = nil
         wanted = true
         throttle = LiveActivityThrottle()
         request()

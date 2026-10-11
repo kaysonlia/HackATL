@@ -1,21 +1,39 @@
 import simd
 
 /// Touching or bumping the phone reaches the mics through its body and sounds loud and close. The
-/// motion sensors catch it: a sharp jump in user acceleration between consecutive samples (~60 Hz),
-/// or a large acceleration. Smooth turning and slow handling don't count.
+/// motion sensors catch it: a jolt (a sharp jump in user acceleration between ~60 Hz samples, or a large
+/// acceleration) after the phone has been still for 0.5 s starts a handling episode of at most 1.5 s.
+/// Continuous motion (walking, carrying) is not handling, so it never blanks the classifier.
 public struct HandlingDetector: Sendable {
     /// g between consecutive samples.
     public static let jerkThreshold = 0.04
     /// g.
     public static let accelerationThreshold = 0.15
+    /// Below this the phone counts as still (g).
+    public static let calmThreshold = 0.05
+    /// Still samples needed before a jolt counts (0.5 s).
+    public static let calmSamplesNeeded = 30
+    /// Longest handling episode in samples (1.5 s); motion after that is carrying, not handling.
+    public static let episodeSamples = 90
+
     private var last: SIMD3<Double>?
+    private var calmRun = 0
+    private var episodeAge: Int?
 
     public init() {}
 
     public mutating func update(userAcceleration a: SIMD3<Double>) -> Bool {
-        defer { last = a }
+        defer {
+            last = a
+            calmRun = simd_length(a) < Self.calmThreshold ? calmRun + 1 : 0
+        }
+        if let age = episodeAge { episodeAge = age + 1 > Self.episodeSamples ? nil : age + 1 }
         let jerk = last.map { simd_length(a - $0) } ?? 0
-        return jerk > Self.jerkThreshold || simd_length(a) > Self.accelerationThreshold
+        guard jerk > Self.jerkThreshold || simd_length(a) > Self.accelerationThreshold else { return false }
+        if episodeAge != nil { return true }
+        guard calmRun >= Self.calmSamplesNeeded else { return false }
+        episodeAge = 0
+        return true
     }
 }
 
@@ -40,6 +58,12 @@ public struct HandlingTimeline: Sendable {
 
     public mutating func prune(before t: Double) {
         intervals.removeAll { $0.upperBound < t }
+    }
+
+    /// Classifier detections kept for a window that overlaps handling: Critical and High sounds always
+    /// count (a siren must not vanish because the phone was bumped); Low and Medium ones are dropped.
+    public static func keepDuringHandling(_ active: [String: Double], urgencyMap: UrgencyMap) -> [String: Double] {
+        active.filter { urgencyMap.urgency(for: $0.key) >= .high }
     }
 }
 

@@ -11,13 +11,13 @@ struct EchoWidgets: WidgetBundle {
 struct EchoLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: EchoActivityAttributes.self) { context in
-            LiveBanner(state: context.state)
+            LiveBanner(state: context.state, stale: context.isStale)
                 .padding(16)
                 .activityBackgroundTint(Color.black.opacity(0.75))
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
-                DynamicIslandExpandedRegion(.bottom) { LiveBanner(state: context.state) }
+                DynamicIslandExpandedRegion(.bottom) { LiveBanner(state: context.state, stale: context.isStale) }
             } compactLeading: {
                 StatusDot(state: context.state)
             } compactTrailing: {
@@ -31,6 +31,8 @@ struct EchoLiveActivityWidget: Widget {
 
 struct LiveBanner: View {
     let state: EchoActivityAttributes.ContentState
+    /// No update for 10 s: the app may have stopped (crash, memory kill), so don't claim it's listening.
+    var stale = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -38,18 +40,19 @@ struct LiveBanner: View {
                 StatusDot(state: state)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.headline).foregroundStyle(.white)
-                    if !state.detail.isEmpty {
+                    if !stale, !state.detail.isEmpty {
                         Text(state.detail).font(.subheadline.monospacedDigit()).foregroundStyle(.white.opacity(0.8))
                     }
                 }
                 Spacer()
-                DirectionArrow(state: state).font(.title2.bold())
+                if !stale { DirectionArrow(state: state).font(.title2.bold()) }
             }
-            if state.group != nil { UrgencyBar(score: state.score) }
+            if !stale, state.group != nil { UrgencyBar(score: state.score) }
         }
     }
 
     private var title: String {
+        if stale { return "Not listening" }
         if state.paused { return "Paused" }
         guard let group = state.group else { return "Listening…" }
         return state.band.isEmpty ? group : "\(group) · \(state.band)"

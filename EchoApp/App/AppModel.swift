@@ -97,6 +97,7 @@ final class AppModel {
         }
     }
     @ObservationIgnored private var announced: Set<String> = []
+    @ObservationIgnored private var isStarting = false
     /// Latest tracker events and live capture time (seconds), for 10 Hz display refreshes.
     @ObservationIgnored private var trackedEvents: [SoundEvent] = []
     @ObservationIgnored private var captureNow: Double = 0
@@ -153,6 +154,7 @@ final class AppModel {
         }
         liveActivity.onProblem = { [weak self] message in self?.liveActivityNote = message }
         motion.onHandling = { [weak self] in self?.noteHandling() }
+        LiveActivityController.endLeftovers()
         observeSession()
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         observers.append(NotificationCenter.default.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -170,7 +172,10 @@ final class AppModel {
     }
 
     func start() async {
-        guard !isListening, pipeline != nil else { return }
+        // Re-entrancy: a double-tapped Start would otherwise run twice across the awaits below.
+        guard !isListening, !isStarting, pipeline != nil else { return }
+        isStarting = true
+        defer { isStarting = false }
         guard await AVCaptureDevice.requestAccess(for: .audio) else {
             status = .permissionDenied
             return

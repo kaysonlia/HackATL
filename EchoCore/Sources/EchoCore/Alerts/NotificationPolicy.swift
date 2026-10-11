@@ -15,6 +15,11 @@ public struct NotificationPolicy: Sendable {
 
     /// True if a notification should be posted now; records it when so.
     public mutating func shouldNotify(group: String, score: Double, now: Double, isForeground: Bool, hits: Int) -> Bool {
+        // The capture clock restarted (route or sample-rate change): forget the old timeline.
+        if let lastAny, now < lastAny {
+            self.lastAny = nil
+            lastByGroup = [:]
+        }
         guard !isForeground, score >= UrgencyScore.urgentThreshold, hits >= minHits else { return false }
         if let lastAny, now - lastAny < minGap { return false }
         if let last = lastByGroup[group], now - last.time < groupCooldown, score < last.score + scoreRise { return false }
