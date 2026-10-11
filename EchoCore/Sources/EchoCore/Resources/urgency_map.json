@@ -1,57 +1,28 @@
 {
-  "_comment": "Default urgency tier per consolidated group from yamnet_consolidation_map.json. All 42 groups assigned explicitly; users can override per-class in their profile. UrgencyClassifier matches exactly against the group name produced by YamnetClassifier.",
-
+  "_comment": "SoundSightAI sound groups by urgency tier (regrouped from the 42 starting groups; hidden sounds are unmapped).",
   "CRITICAL": [
     "Siren",
-    "Smoke/Fire Alarm",
-    "Vehicle Horn",
-    "Car Alarm",
+    "Smoke Alarm",
     "Gunshot/Explosion"
   ],
-
   "HIGH": [
-    "Screaming",
-    "Glass Shatter",
-    "Skidding/Tire Squeal",
-    "Reversing Beeps",
-    "Slam/Bang/Crash",
-    "Shouting/Yelling",
-    "Motorcycle"
+    "Traffic Warning",
+    "Screaming/Shouting",
+    "Crash/Glass Breaking"
   ],
-
   "MEDIUM": [
-    "Doorbell",
-    "Phone Ring",
-    "Alarm/Buzzer/Beep",
-    "Knock",
-    "Baby Cry",
-    "Crying",
-    "Dog",
     "Vehicle",
-    "Aircraft",
-    "Train",
-    "Power Tool"
+    "Door",
+    "Phone Ringing",
+    "Baby/Crying",
+    "Dog",
+    "Beeping/Timer"
   ],
-
   "LOW": [
     "Speech",
     "Footsteps",
-    "Door",
-    "Water",
-    "Crowd/Applause/Laughter",
-    "Music",
-    "Appliance/Kitchen",
-    "Body Sounds",
-    "Cough/Sneeze",
-    "Fart",
-    "Whistle",
-    "Insect Buzz",
-    "Typing/Keyboard",
-    "Keys Jangling",
-    "Camera Shutter",
-    "TV/Radio",
-    "Ambient Nature",
-    "Silence",
-    "Other"
+    "Water Running",
+    "Power Tool",
+    "Cough/Sneeze"
   ]
 }

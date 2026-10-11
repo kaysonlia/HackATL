@@ -1,0 +1,76 @@
+{
+ "apple": {
+  "thresholds": {
+   "Siren": 0.652,
+   "Smoke Alarm": 0.309,
+   "Gunshot/Explosion": 0.841,
+   "Traffic Warning": 0.85,
+   "Screaming/Shouting": 0.639,
+   "Crash/Glass Breaking": 0.3,
+   "Vehicle": 0.85,
+   "Door": 0.85,
+   "Phone Ringing": 0.528,
+   "Baby/Crying": 0.735,
+   "Dog": 0.85,
+   "Beeping/Timer": 0.358,
+   "Speech": 0.417,
+   "Footsteps": 0.3,
+   "Water Running": 0.628,
+   "Power Tool": 0.829,
+   "Cough/Sneeze": 0.561
+  },
+  "recall_at_threshold": {
+   "Siren": 1.0,
+   "Gunshot/Explosion": 0.97,
+   "Traffic Warning": 0.9,
+   "Crash/Glass Breaking": 0.8,
+   "Vehicle": 0.86,
+   "Door": 0.65,
+   "Baby/Crying": 1.0,
+   "Dog": 1.0,
+   "Beeping/Timer": 0.97,
+   "Footsteps": 0.72,
+   "Water Running": 1.0,
+   "Power Tool": 0.94,
+   "Cough/Sneeze": 0.97
+  },
+  "false_alarm_rate_unrelated_clips": 0.267
+ },
+ "yamnet": {
+  "thresholds": {
+   "Siren": 0.393,
+   "Smoke Alarm": 0.2,
+   "Gunshot/Explosion": 0.85,
+   "Traffic Warning": 0.257,
+   "Screaming/Shouting": 0.2,
+   "Crash/Glass Breaking": 0.217,
+   "Vehicle": 0.85,
+   "Door": 0.429,
+   "Phone Ringing": 0.2,
+   "Baby/Crying": 0.583,
+   "Dog": 0.634,
+   "Beeping/Timer": 0.85,
+   "Speech": 0.85,
+   "Footsteps": 0.344,
+   "Water Running": 0.2,
+   "Power Tool": 0.59,
+   "Cough/Sneeze": 0.36
+  },
+  "recall_at_threshold": {
+   "Siren": 1.0,
+   "Gunshot/Explosion": 0.95,
+   "Traffic Warning": 0.85,
+   "Crash/Glass Breaking": 0.9,
+   "Vehicle": 0.79,
+   "Door": 0.44,
+   "Baby/Crying": 1.0,
+   "Dog": 1.0,
+   "Beeping/Timer": 0.82,
+   "Footsteps": 0.6,
+   "Water Running": 1.0,
+   "Power Tool": 0.8,
+   "Cough/Sneeze": 0.88
+  },
+  "false_alarm_rate_unrelated_clips": 0.281
+ }
+}

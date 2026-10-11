@@ -26,14 +26,11 @@ struct DeviceLogFixTests {
     }
 
     @Test func importantGroupsNeedAtMost085() throws {
-        // Barks scored 0.86-0.93 on device but Dog needed 0.938. Cap MEDIUM+ groups; LOW groups
-        // (Music, Door, Other...) keep their stricter thresholds to avoid clutter.
+        // Barks scored 0.86-0.93 on device but Dog needed 0.938; MEDIUM+ groups are capped at 0.85.
         let r = try ClassificationResources.bundled()
         let important = r.urgency.groups.filter { r.urgency.urgency(for: $0) >= .medium }
         #expect(important.allSatisfy { r.thresholds.threshold(for: $0) <= 0.85 })
         #expect(r.thresholds.threshold(for: "Dog") == 0.85)
-        #expect(r.thresholds.threshold(for: "Vehicle Horn") == 0.85)
-        #expect(r.thresholds.threshold(for: "Music") == 0.95)
-        #expect(r.thresholds.threshold(for: "Cough/Sneeze") == 0.561)
+        #expect(r.thresholds.threshold(for: "Traffic Warning") == 0.85)
     }
 }

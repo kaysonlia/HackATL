@@ -68,6 +68,16 @@ final class AppModel {
     @ObservationIgnored private let liveActivity = LiveActivityController()
     @ObservationIgnored private var pipeline: AudioPipeline?
     @ObservationIgnored private var sourceLevels = SourceLevels(levels: [:])
+    private static let optionalGroupsKey = "enabledOptionalGroups"
+    /// Groups hidden by default that Settings can turn on.
+    private(set) var optionalGroups: [String] = []
+    /// Optional groups the user turned on; persisted.
+    var enabledOptionalGroups: Set<String> = Set(UserDefaults.standard.stringArray(forKey: AppModel.optionalGroupsKey) ?? []) {
+        didSet {
+            pipeline?.enabledOptionalGroups = enabledOptionalGroups
+            UserDefaults.standard.set(enabledOptionalGroups.sorted(), forKey: Self.optionalGroupsKey)
+        }
+    }
     @ObservationIgnored private var announced: Set<String> = []
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
@@ -81,9 +91,11 @@ final class AppModel {
         do {
             let resources = try ClassificationResources.bundled()
             sourceLevels = resources.sourceLevels
+            optionalGroups = resources.visibility.optional
             let motion = motion
             let pipeline = try AudioPipeline(resources: resources) { motion.deviceToWorld() }
             pipeline.calibration = effectiveCalibration
+            pipeline.enabledOptionalGroups = enabledOptionalGroups
             pipeline.onWindow = { [weak self] summary in Task { @MainActor in self?.apply(summary) } }
             pipeline.onTracker = { [weak self] output in Task { @MainActor in self?.apply(output) } }
             pipeline.onError = { [weak self] message in

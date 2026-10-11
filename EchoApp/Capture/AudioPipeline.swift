@@ -34,6 +34,7 @@ final class AudioPipeline: @unchecked Sendable {
     private let tracker: EventTracker
     private let state = OSAllocatedUnfairLock(initialState: FOAAxisCalibration.initialGuess)
     private let wantsYAMNet = OSAllocatedUnfairLock(initialState: false)
+    private let enabledOptional = OSAllocatedUnfairLock(initialState: Set<String>())
     private let deviceToWorld: @Sendable () -> simd_float3x3
 
     private var sampleRate: Double = 0
@@ -78,6 +79,12 @@ final class AudioPipeline: @unchecked Sendable {
     var useYAMNet: Bool {
         get { wantsYAMNet.withLock { $0 } }
         set { wantsYAMNet.withLock { $0 = newValue } }
+    }
+
+    /// Optional groups (Footsteps, Water Running, ...) the user turned on in Settings.
+    var enabledOptionalGroups: Set<String> {
+        get { enabledOptional.withLock { $0 } }
+        set { enabledOptional.withLock { $0 = newValue } }
     }
 
     /// Safe to call from any queue.
@@ -174,7 +181,8 @@ final class AudioPipeline: @unchecked Sendable {
     private func handle(_ joined: [JoinedWindow]) {
         for j in joined {
             let now = Double(j.windowStart) / sampleRate
-            let active = activeThresholds.active(j.classification.groupScores)
+            let active = resources.visibility.shown(activeThresholds.active(j.classification.groupScores),
+                                                    enabled: enabledOptionalGroups)
             let level = j.doa.flatMap { levels[$0.windowStart] }
             let created = tracker.ingest(active: active, doa: j.doa, now: now, levelDB: level)
             onTracker?(TrackerOutput(events: tracker.events, newEvents: created, now: now))

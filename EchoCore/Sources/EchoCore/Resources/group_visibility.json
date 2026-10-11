@@ -1,0 +1,9 @@
+{
+  "_comment": "Groups hidden unless the user turns them on in Settings.",
+  "optional": [
+    "Footsteps",
+    "Water Running",
+    "Power Tool",
+    "Cough/Sneeze"
+  ]
+}

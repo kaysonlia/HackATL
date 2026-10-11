@@ -6,6 +6,7 @@ public struct ClassificationResources: Sendable {
     public let thresholds: GroupThresholds
     public let urgency: UrgencyMap
     public let sourceLevels: SourceLevels
+    public let visibility: GroupVisibility
 
     public static func bundled() throws -> ClassificationResources {
         func load(_ name: String) throws -> Data {
@@ -18,6 +19,7 @@ public struct ClassificationResources: Sendable {
             mapper: try LabelMapper(json: load("apple_to_group")),
             thresholds: try GroupThresholds(json: load("thresholds")),
             urgency: try UrgencyMap(json: load("urgency_map")),
-            sourceLevels: try SourceLevels(json: load("source_levels")))
+            sourceLevels: try SourceLevels(json: load("source_levels")),
+            visibility: try GroupVisibility(json: load("group_visibility")))
     }
 }

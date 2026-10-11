@@ -3,6 +3,7 @@ import SwiftUI
 struct MainView: View {
     @Bindable var model: AppModel
     @State private var showProbe = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
@@ -27,6 +28,10 @@ struct MainView: View {
                 .padding()
             }
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
+                        .accessibilityLabel("Settings")
+                }
                 ToolbarItem(placement: .principal) {
                     Text("SoundSightAI")
                         .font(.headline)
@@ -36,6 +41,7 @@ struct MainView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showProbe) { ProbeView(model: model) }
+            .sheet(isPresented: $showSettings) { SettingsView(model: model) }
         }
     }
 }

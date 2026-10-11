@@ -1,14 +1,22 @@
 {
-  "_comment": "Typical level in dB SPL at 1 m per sound group, for the urgency distance estimate. Starting values; tune on device.",
+  "_comment": "Typical level in dB SPL at 1 m per SoundSightAI group, for the urgency distance estimate. Starting values; tune on device.",
   "levels": {
-    "Siren": 120, "Smoke/Fire Alarm": 95, "Vehicle Horn": 110, "Car Alarm": 110, "Gunshot/Explosion": 140,
-    "Screaming": 100, "Glass Shatter": 100, "Skidding/Tire Squeal": 100, "Reversing Beeps": 97,
-    "Slam/Bang/Crash": 100, "Shouting/Yelling": 88, "Motorcycle": 95,
-    "Doorbell": 80, "Phone Ring": 75, "Alarm/Buzzer/Beep": 85, "Knock": 75, "Baby Cry": 90, "Crying": 75,
-    "Dog": 90, "Vehicle": 85, "Aircraft": 130, "Train": 110, "Power Tool": 100,
-    "Speech": 60, "Footsteps": 60, "Door": 75, "Water": 65, "Crowd/Applause/Laughter": 75, "Music": 75,
-    "Appliance/Kitchen": 70, "Body Sounds": 50, "Cough/Sneeze": 70, "Fart": 55, "Whistle": 90,
-    "Insect Buzz": 45, "Typing/Keyboard": 55, "Keys Jangling": 60, "Camera Shutter": 55, "TV/Radio": 65,
-    "Ambient Nature": 55, "Silence": 0, "Other": 70
+    "Siren": 120,
+    "Smoke Alarm": 95,
+    "Gunshot/Explosion": 140,
+    "Traffic Warning": 110,
+    "Screaming/Shouting": 95,
+    "Crash/Glass Breaking": 100,
+    "Vehicle": 85,
+    "Door": 75,
+    "Phone Ringing": 75,
+    "Baby/Crying": 85,
+    "Dog": 90,
+    "Beeping/Timer": 80,
+    "Speech": 60,
+    "Footsteps": 60,
+    "Water Running": 65,
+    "Power Tool": 100,
+    "Cough/Sneeze": 70
   }
 }
