@@ -12,29 +12,6 @@ enum ListeningStatus: Equatable {
     case error(String)
 }
 
-/// What the UI needs for one tracked sound.
-struct EventDisplay: Identifiable, Equatable {
-    var id: String { group }
-    var group: String
-    var urgency: Urgency
-    var confidence: Double
-    /// World bearing of the belief peak; nil until the belief is concentrated enough (R ≥ 0.5).
-    var worldBearing: Double?
-    var concentration: Double
-    var belief: [Double]
-
-    static let minConcentration = 0.5
-
-    init(_ e: SoundEvent) {
-        group = e.group
-        urgency = e.urgency
-        confidence = e.confidence
-        concentration = e.belief.concentration
-        worldBearing = concentration >= Self.minConcentration ? e.belief.peakBearing : nil
-        belief = e.belief.probabilities
-    }
-}
-
 @MainActor
 @Observable
 final class AppModel {
@@ -42,14 +19,17 @@ final class AppModel {
 
     var status: ListeningStatus = .idle
     var isListening = false
+    /// Tracked sounds, most urgent (highest score) first.
     var events: [EventDisplay] = []
     var forwardBearing: Double = 0
     var classifierWarning: String?
-    /// Set from the scene phase; false while backgrounded or locked.
+    /// When listening last started; drives the 3 s radar sweep.
+    var listeningSince: Date?
     /// Debug: classify with YAMNet even in the foreground (it always runs in the background).
     var forceYAMNet = false {
         didSet { pipeline?.useYAMNet = forceYAMNet || !isForeground }
     }
+    /// Set from the scene phase; false while backgrounded or locked.
     var isForeground = true {
         didSet {
             // SoundAnalysis fails in the background; YAMNet on the CPU keeps classifying.
@@ -68,6 +48,8 @@ final class AppModel {
     @ObservationIgnored private var windowsAtBackground = 0
     @ObservationIgnored private var classificationsAtBackground = 0
     var probe = ProbeState()
+    /// Extra lines for the status banner.
+    var notes: [String] { [classifierWarning].compactMap { $0 } }
     var calibration: FOAAxisCalibration {
         didSet {
             pipeline?.calibration = calibration
@@ -81,6 +63,8 @@ final class AppModel {
     @ObservationIgnored private let motion = MotionProvider()
     @ObservationIgnored private let haptics = HapticsManager()
     @ObservationIgnored private var pipeline: AudioPipeline?
+    @ObservationIgnored private var sourceLevels = SourceLevels(levels: [:])
+    @ObservationIgnored private var announced: Set<String> = []
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
 
     init() {
@@ -91,8 +75,10 @@ final class AppModel {
             calibration = .initialGuess
         }
         do {
+            let resources = try ClassificationResources.bundled()
+            sourceLevels = resources.sourceLevels
             let motion = motion
-            let pipeline = try AudioPipeline(resources: .bundled()) { motion.deviceToWorld() }
+            let pipeline = try AudioPipeline(resources: resources) { motion.deviceToWorld() }
             pipeline.calibration = calibration
             pipeline.onWindow = { [weak self] summary in Task { @MainActor in self?.apply(summary) } }
             pipeline.onTracker = { [weak self] output in Task { @MainActor in self?.apply(output) } }
@@ -138,9 +124,12 @@ final class AppModel {
             return
         }
         pipeline?.reset()
+        haptics.reset()
+        announced = []
         motion.start()
         capture.start()
         isListening = true
+        listeningSince = Date()
         if !capture.foaEnabled {
             status = .directionUnavailable("this device can't capture spatial (FOA) audio. Sounds are still identified.")
         } else if !motion.isAvailable {
@@ -154,6 +143,7 @@ final class AppModel {
         capture.stop()
         motion.stop()
         isListening = false
+        listeningSince = nil
         events = []
         status = .idle
     }
@@ -193,14 +183,25 @@ final class AppModel {
 
     private func apply(_ output: TrackerOutput) {
         guard isListening else { return }
-        events = output.events.map(EventDisplay.init)
+        let displays = output.events.map { EventDisplay($0, sourceLevels: sourceLevels) }.sorted { $0.score > $1.score }
+        events = displays
         classificationsSeen += 1
         for e in output.newEvents { probe.logDetection(e.group, inBackground: !isForeground, at: Date()) }
-        for e in output.events where e.lastSeen == output.now {
-            haptics.alert(group: e.group, urgency: e.urgency, now: output.now)
+        if isForeground {
+            let refreshed = Set(output.events.filter { $0.lastSeen == output.now }.map(\.group))
+            for d in displays where refreshed.contains(d.group) {
+                haptics.alert(group: d.group, score: d.score, now: output.now)
+            }
         }
-        for e in output.newEvents where e.urgency == .critical {
-            AccessibilityNotification.Announcement("\(e.group), critical").post()
+        announceUrgent(displays)
+    }
+
+    /// VoiceOver announces each event once, when it first reaches Urgent.
+    private func announceUrgent(_ displays: [EventDisplay]) {
+        announced.formIntersection(displays.map(\.group))
+        for d in displays where d.band == .urgent && !announced.contains(d.group) {
+            announced.insert(d.group)
+            AccessibilityNotification.Announcement("\(d.group), urgent, \(d.directionPhrase(forward: forwardBearing))").post()
         }
     }
 

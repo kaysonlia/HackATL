@@ -8,10 +8,11 @@ struct MainView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    StatusBanner(status: model.status, classifierWarning: model.classifierWarning)
-                    RadarView(events: model.events, forward: model.forwardBearing, isListening: model.isListening)
+                    StatusBanner(status: model.status, notes: model.notes)
+                    RadarView(events: model.events, forward: model.forwardBearing, listeningSince: model.listeningSince)
                         .aspectRatio(1, contentMode: .fit)
-                    EventListView(events: model.events, forward: model.forwardBearing)
+                    FocusCard(event: model.events.first, forward: model.forwardBearing, isListening: model.isListening)
+                    EventListView(events: Array(model.events.dropFirst()), forward: model.forwardBearing)
                 }
                 .padding()
             }

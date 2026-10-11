@@ -44,9 +44,10 @@ final class AudioPipeline: @unchecked Sendable {
     private var classifierKind: ClassifierKind?
     private var classifierFailedAt: Int64?
     private var activeThresholds: GroupThresholds
-    /// Debug (probe session log): raw labels and omni level per window start.
+    /// Omni level (approximate dB SPL) per DOA window start, for the tracker and the session log.
+    private var levels: [Int64: Double] = [:]
+    /// Debug (probe session log): raw labels per window start.
     private var rawLabels: [Int64: [String: Double]] = [:]
-    private var debugLevels: [Int64: Double] = [:]
 
     var onWindow: (@Sendable (WindowSummary) -> Void)?
     var onTracker: (@Sendable (TrackerOutput) -> Void)?
@@ -94,7 +95,7 @@ final class AudioPipeline: @unchecked Sendable {
             self.classifierKind = nil
             self.classifierFailedAt = nil
             self.rawLabels = [:]
-            self.debugLevels = [:]
+            self.levels = [:]
             self.tracker.reset()
         }
     }
@@ -159,10 +160,9 @@ final class AudioPipeline: @unchecked Sendable {
         for window in windows {
             let intensity = estimator.intensity.analyze(window)
             let doa = estimator.estimate(intensity, windowStart: window.startSample, calibration: cal, deviceToWorld: deviceToWorld())
-            let w = Double(Self.rms(window.w))
-            debugLevels[window.startSample] = w > 0 ? 20 * log10(w) + 120 : 0
+            levels[window.startSample] = UrgencyScore.level(rms: Double(Self.rms(window.w)))
             let cutoff = window.startSample - Int64(8 * acc.hopLength)
-            debugLevels = debugLevels.filter { $0.key >= cutoff }
+            levels = levels.filter { $0.key >= cutoff }
             rawLabels = rawLabels.filter { $0.key >= cutoff }
             onWindow?(WindowSummary(summedRaw: intensity.summedRaw, diffuseness: intensity.diffuseness,
                                     totalEnergy: intensity.totalEnergy,
@@ -175,7 +175,8 @@ final class AudioPipeline: @unchecked Sendable {
         for j in joined {
             let now = Double(j.windowStart) / sampleRate
             let active = activeThresholds.active(j.classification.groupScores)
-            let created = tracker.ingest(active: active, doa: j.doa, now: now)
+            let level = j.doa.flatMap { levels[$0.windowStart] }
+            let created = tracker.ingest(active: active, doa: j.doa, now: now, levelDB: level)
             onTracker?(TrackerOutput(events: tracker.events, newEvents: created, now: now))
             if let onDebugLine { onDebugLine(debugLine(j, active: active, now: now)) }
         }
@@ -184,7 +185,7 @@ final class AudioPipeline: @unchecked Sendable {
     /// t;level_db;diffuseness;doa_peaks;top_labels;group_scores;active;events
     private func debugLine(_ j: JoinedWindow, active: [String: Double], now: Double) -> String {
         func f(_ x: Double) -> String { String(format: "%.2f", x) }
-        let level = j.doa.flatMap { debugLevels[$0.windowStart] }.map { String(format: "%.1f", $0) } ?? ""
+        let level = j.doa.flatMap { levels[$0.windowStart] }.map { String(format: "%.1f", $0) } ?? ""
         let peaks = j.doa?.peaks.map { "\(Int($0.bearing.rounded()))@\(f($0.weight))" }.joined(separator: " ") ?? ""
         let top = (rawLabels[j.windowStart] ?? [:]).sorted { $0.value > $1.value }.prefix(5).map { "\($0.key):\(f($0.value))" }
         let groups = j.classification.groupScores.filter { $0.value >= 0.2 }.sorted { $0.value > $1.value }.map { "\($0.key):\(f($0.value))" }

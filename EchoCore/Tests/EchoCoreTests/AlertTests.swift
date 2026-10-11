@@ -2,16 +2,23 @@ import Testing
 @testable import EchoCore
 
 struct AlertTests {
-    @Test func hapticGateCooldownAndTiers() {
+    @Test func hapticPatternsFollowScore() {
+        #expect(HapticPattern(score: 0.75) == .triple)
+        #expect(HapticPattern(score: 0.6) == .double)
+        #expect(HapticPattern(score: 0.3) == .single)
+        #expect(HapticPattern(score: 0.29) == nil)
+    }
+
+    @Test func hapticGateCooldown() {
         var g = HapticGate(cooldown: 5)
         let fired = [
-            g.shouldFire(group: "Speech", urgency: .low, now: 0),
-            g.shouldFire(group: "Siren", urgency: .critical, now: 0),
-            g.shouldFire(group: "Siren", urgency: .critical, now: 4.9),
-            g.shouldFire(group: "Dog", urgency: .medium, now: 4.9),
-            g.shouldFire(group: "Siren", urgency: .critical, now: 5),
+            g.shouldFire(group: "Speech", score: 0.1, now: 0),
+            g.shouldFire(group: "Siren", score: 0.9, now: 0),
+            g.shouldFire(group: "Siren", score: 0.9, now: 4.9),
+            g.shouldFire(group: "Dog", score: 0.45, now: 4.9),
+            g.shouldFire(group: "Siren", score: 0.6, now: 5),
         ]
-        #expect(fired == [false, true, false, true, true])
+        #expect(fired == [nil, .triple, nil, .single, .double])
     }
 
     @Test func directionPhrases() {

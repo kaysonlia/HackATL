@@ -3,7 +3,8 @@ import UIKit
 
 struct StatusBanner: View {
     let status: ListeningStatus
-    let classifierWarning: String?
+    /// Extra notices (classifier, notifications, lock-screen bar).
+    let notes: [String]
 
     var body: some View {
         VStack(spacing: 8) {
@@ -23,8 +24,8 @@ struct StatusBanner: View {
             case .error(let message):
                 banner(message, systemImage: "exclamationmark.triangle")
             }
-            if let classifierWarning {
-                banner(classifierWarning, systemImage: "waveform.badge.exclamationmark")
+            ForEach(notes, id: \.self) { note in
+                banner(note, systemImage: "info.circle")
             }
         }
     }

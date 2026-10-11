@@ -20,6 +20,7 @@ targets:
         excludes:
           - "Config/**"
           - "Info.plist"
+      - path: EchoShared
     dependencies:
       - package: EchoCore
     configFiles:
