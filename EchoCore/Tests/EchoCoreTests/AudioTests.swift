@@ -78,3 +78,13 @@ struct WindowAccumulatorTests {
         #expect(w.map(\.startSample) == [0])
     }
 }
+
+struct QuarterHopTests {
+    @Test func classifierWindowsEveryQuarterSecond() {
+        // A new 1 s window every 0.25 s names sounds sooner and confirms Low/Medium ones in 0.25 s.
+        let a = WindowAccumulator.forSampleRate(48_000, hopSeconds: 0.25)
+        #expect(a.windowLength == 48_000)
+        #expect(a.hopLength == 12_000)
+        #expect(WindowAccumulator.forSampleRate(48_000).hopLength == 24_000)
+    }
+}

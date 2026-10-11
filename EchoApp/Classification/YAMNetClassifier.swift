@@ -6,8 +6,8 @@ import EchoCore
 /// Plain Core ML CPU inference keeps working in the background, where SoundAnalysis fails.
 /// Not thread-safe: call `analyze` from one serial queue; results arrive synchronously on it.
 final class YAMNetClassifier: SoundClassifier, @unchecked Sendable {
-    /// Hop between windows in 16 kHz samples (0.5 s, matching the direction windows).
-    static let hopLength = 8_000
+    /// Hop between windows in 16 kHz samples (0.25 s, matching the direction windows).
+    static let hopLength = 4_000
 
     /// Loads the bundled network for CPU-only inference (allowed in the background).
     static func loadModel() throws -> MLModel {

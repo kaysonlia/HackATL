@@ -141,7 +141,8 @@ final class AudioPipeline: @unchecked Sendable {
     private func setUp(sampleRate: Double) {
         self.sampleRate = sampleRate
         samplesSeen = 0
-        let acc = WindowAccumulator.forSampleRate(sampleRate)
+        // A new 1 s window every 0.25 s: sounds are named sooner and Low/Medium ones confirmed in 0.25 s.
+        let acc = WindowAccumulator.forSampleRate(sampleRate, hopSeconds: 0.25)
         accumulator = acc
         joiner = WindowJoiner(hopLength: acc.hopLength)
         classifier = nil
@@ -295,7 +296,10 @@ final class AudioPipeline: @unchecked Sendable {
             let created = tracker.ingest(active: active, doa: j.doa, now: now, levelDB: level)
             // A classified sound claims the Unclassified marker it started as.
             for e in tracker.events where e.lastSeen == now && e.isConfirmed {
-                markerTracker.claim(group: e.group, bearing: e.showsDirection ? e.belief.peakBearing : nil, windowStart: now)
+                if let named = markerTracker.claim(group: e.group, bearing: e.showsDirection ? e.belief.peakBearing : nil, windowStart: now) {
+                    let live = Double(blockStart) / sampleRate
+                    onNote?(String(format: "named %@ %.1f s after it started", e.group, live - named.firstSpike))
+                }
             }
             onTracker?(TrackerOutput(events: tracker.events, newEvents: created, now: now))
             if let onDebugLine { onDebugLine(debugLine(j, active: active, now: now)) }

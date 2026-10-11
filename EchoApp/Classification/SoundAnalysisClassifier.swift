@@ -40,7 +40,7 @@ final class SoundAnalysisClassifier: NSObject, SoundClassifier, SNResultsObservi
         analyzer = SNAudioStreamAnalyzer(format: format)
         let request = try SNClassifySoundRequest(classifierIdentifier: .version1)
         request.windowDuration = CMTime(seconds: 1.0, preferredTimescale: CMTimeScale(sampleRate))
-        request.overlapFactor = 0.5
+        request.overlapFactor = 0.75  // a new 1 s window every 0.25 s
         super.init()
         try analyzer.add(request, withObserver: self)
     }

@@ -60,12 +60,12 @@ struct MarkerTests {
         var m = MarkerTracker()
         m.spike(bearing: 0, level: 70, now: 0)  // a clap
         let marker = m.markers[0]
-        #expect(m.state(of: marker, now: 1.4) == .classifying)
-        #expect(m.state(of: marker, now: 1.6) == .unclassified)
-        #expect(abs(m.opacity(of: marker, now: 2.0) - 0.5) < 1e-9)
-        m.expire(now: 2.4)
+        #expect(m.state(of: marker, now: 0.9) == .classifying)
+        #expect(m.state(of: marker, now: 1.1) == .unclassified)
+        #expect(abs(m.opacity(of: marker, now: 1.5) - 0.5) < 1e-9)
+        m.expire(now: 1.9)
         #expect(m.markers.count == 1)
-        m.expire(now: 2.6)
+        m.expire(now: 2.1)
         #expect(m.markers.isEmpty)
     }
 

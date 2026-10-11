@@ -38,9 +38,10 @@ public struct WindowAccumulator: Sendable {
     }
 
     /// 1 s windows with 50% overlap at any sample rate (spec §3: same cadence as the reference design).
-    public static func forSampleRate(_ sampleRate: Double) -> WindowAccumulator {
+    /// 1 s windows starting every `hopSeconds` (0.5 s by default).
+    public static func forSampleRate(_ sampleRate: Double, hopSeconds: Double = 0.5) -> WindowAccumulator {
         let window = max(2, Int(sampleRate.rounded()))
-        return WindowAccumulator(windowLength: window, hopLength: window / 2)
+        return WindowAccumulator(windowLength: window, hopLength: max(1, Int((sampleRate * hopSeconds).rounded())))
     }
 
     public mutating func reset() {

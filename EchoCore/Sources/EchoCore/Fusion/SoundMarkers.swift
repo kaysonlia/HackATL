@@ -28,7 +28,7 @@ public struct MarkerSnapshot: Sendable, Equatable {
 
 /// Spikes become markers at once; a later classification of the same sound (close in time and
 /// direction) claims the marker so the arrow turns into that sound. An unclaimed marker reads
-/// "Classifying…" while the sound continues plus 1.5 s for the classifier (at most 5 s), then
+/// "Classifying…" while the sound continues plus 1 s for the classifier (at most 5 s), then
 /// "Unclassified" for 1 s after the sound stops. A claimed marker goes 1 s after its last spike, by
 /// which time the sound's own arrow has taken over. Spikes near a named arrow belong to it.
 public struct MarkerTracker: Sendable {
@@ -37,7 +37,7 @@ public struct MarkerTracker: Sendable {
     public var suppressAngle = 40.0
     public var classifyingFor = 5.0
     /// Time after the last spike for the classifier to name the sound.
-    public var classifyAfterLast = 1.5
+    public var classifyAfterLast = 1.0
     public var unclassifiedHold = 1.0
     public var claimedHold = 1.0
     public var claimAngle = 45.0
@@ -99,7 +99,9 @@ public struct MarkerTracker: Sendable {
 
     /// A shown group was detected in the classification window starting at `windowStart`;
     /// `bearing` is its direction if the tracker knows it.
-    public mutating func claim(group: String, bearing: Double?, windowStart: Double) {
+    /// Returns the marker if this call named it (it was still unclassified).
+    @discardableResult
+    public mutating func claim(group: String, bearing: Double?, windowStart: Double) -> SoundMarker? {
         let lo = windowStart - claimLead, hi = windowStart + windowLength
         let candidates = markers.indices.filter { i in
             let m = markers[i]
@@ -112,7 +114,10 @@ public struct MarkerTracker: Sendable {
         } else {
             candidates.max { markers[$0].lastSpike < markers[$1].lastSpike }
         }
-        if let pick { markers[pick].claimedBy = group }
+        guard let pick else { return nil }
+        let wasUnnamed = markers[pick].claimedBy == nil
+        markers[pick].claimedBy = group
+        return wasUnnamed ? markers[pick] : nil
     }
 
     public mutating func reset() {
