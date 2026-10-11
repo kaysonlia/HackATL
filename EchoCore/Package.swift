@@ -7,6 +7,6 @@ let package = Package(
     products: [.library(name: "EchoCore", targets: ["EchoCore"])],
     targets: [
         .target(name: "EchoCore", resources: [.process("Resources")]),
-        .testTarget(name: "EchoCoreTests", dependencies: ["EchoCore"]),
+        .testTarget(name: "EchoCoreTests", dependencies: ["EchoCore"], resources: [.copy("Fixtures")]),
     ]
 )
