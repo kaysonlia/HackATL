@@ -23,6 +23,7 @@ final class AppModel {
     var events: [EventDisplay] = []
     var forwardBearing: Double = 0
     var classifierWarning: String?
+    var notificationsNote: String?
     /// When listening last started; drives the 3 s radar sweep.
     var listeningSince: Date?
     /// Debug: classify with YAMNet even in the foreground (it always runs in the background).
@@ -49,7 +50,7 @@ final class AppModel {
     @ObservationIgnored private var classificationsAtBackground = 0
     var probe = ProbeState()
     /// Extra lines for the status banner.
-    var notes: [String] { [classifierWarning].compactMap { $0 } }
+    var notes: [String] { [classifierWarning, notificationsNote].compactMap { $0 } }
     var calibration: FOAAxisCalibration {
         didSet {
             pipeline?.calibration = calibration
@@ -62,6 +63,7 @@ final class AppModel {
     @ObservationIgnored private let capture = FOACaptureSession()
     @ObservationIgnored private let motion = MotionProvider()
     @ObservationIgnored private let haptics = HapticsManager()
+    @ObservationIgnored private let notifier = UrgentNotifier()
     @ObservationIgnored private var pipeline: AudioPipeline?
     @ObservationIgnored private var sourceLevels = SourceLevels(levels: [:])
     @ObservationIgnored private var announced: Set<String> = []
@@ -123,8 +125,11 @@ final class AppModel {
             status = .error("Couldn't start the microphone: \(error.localizedDescription)")
             return
         }
+        notificationsNote = await notifier.requestAuthorization()
+            ? nil : "Notifications are off: urgent sounds will only show on the lock-screen bar."
         pipeline?.reset()
         haptics.reset()
+        notifier.reset()
         announced = []
         motion.start()
         capture.start()
@@ -140,6 +145,7 @@ final class AppModel {
     }
 
     func stop() {
+        notifier.clear()
         capture.stop()
         motion.stop()
         isListening = false
@@ -194,6 +200,7 @@ final class AppModel {
             }
         }
         announceUrgent(displays)
+        notifier.consider(displays, forward: forwardBearing, now: output.now, isForeground: isForeground)
     }
 
     /// VoiceOver announces each event once, when it first reaches Urgent.

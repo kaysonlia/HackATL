@@ -28,4 +28,12 @@ struct EventTrackerLevelTests {
         #expect(created.map(\.group) == ["Dog"])
         #expect(t.events.map(\.group) == ["Dog"])
     }
+
+    @Test func countsDetectionsPerEvent() {
+        let t = EventTracker(urgencyMap: urgency)
+        t.ingest(active: ["Dog": 0.9], doa: nil, now: 0)
+        t.ingest(active: [:], doa: nil, now: 0.5)
+        t.ingest(active: ["Dog": 0.9], doa: nil, now: 1)
+        #expect(t.events[0].hits == 2)
+    }
 }

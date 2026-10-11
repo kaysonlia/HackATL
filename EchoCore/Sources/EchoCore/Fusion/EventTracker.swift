@@ -12,6 +12,8 @@ public struct SoundEvent: Sendable, Identifiable {
     /// Smoothed omni level (approximate dB SPL) over the windows where this group was active; nil until measured.
     public var levelDB: Double?
     public var directionLatch = DirectionLatch()
+    /// Windows in which this group was active.
+    public var hits = 1
 
     /// Whether the belief is concentrated enough to draw an arrow (with hysteresis).
     public var showsDirection: Bool { directionLatch.isShown }
@@ -58,6 +60,7 @@ public final class EventTracker {
             if var e = byGroup[group] {
                 e.confidence = emaAlpha * score + (1 - emaAlpha) * e.confidence
                 e.lastSeen = now
+                e.hits += 1
                 if let levelDB { e.levelDB = e.levelDB.map { emaAlpha * levelDB + (1 - emaAlpha) * $0 } ?? levelDB }
                 byGroup[group] = e
             } else {

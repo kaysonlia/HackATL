@@ -18,6 +18,8 @@ struct EventDisplay: Identifiable, Equatable {
     var distance: Double?
     var score: Double
     var band: UrgencyBand
+    /// Windows in which the classifier detected this group.
+    var hits: Int
 
     init(_ e: SoundEvent, sourceLevels: SourceLevels) {
         group = e.group
@@ -32,6 +34,7 @@ struct EventDisplay: Identifiable, Equatable {
         distance = e.levelDB.map { UrgencyScore.distance(level: $0, sourceLevel: source) }
         score = UrgencyScore.score(urgency: e.urgency, level: e.levelDB ?? 0, sourceLevel: source)
         band = UrgencyBand(score: score)
+        hits = e.hits
     }
 
     /// "84 dB · ~3 m"; nil before the first level arrives.
