@@ -149,6 +149,7 @@ final class AppModel {
             if upright != self.isHeldUpright { self.isHeldUpright = upright }
         }
         liveActivity.onProblem = { [weak self] message in self?.liveActivityNote = message }
+        motion.onHandling = { [weak self] in self?.noteHandling() }
         observeSession()
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         observers.append(NotificationCenter.default.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -213,6 +214,11 @@ final class AppModel {
         markers = []
         events = []
         status = .idle
+    }
+
+    /// Touches and bumps reach the mics through the phone's body: ignore sounds for the next 0.25 s.
+    func noteHandling() {
+        pipeline?.noteHandling(until: Date().addingTimeInterval(0.25))
     }
 
     func recordProbe(seconds: Double) {
@@ -298,7 +304,9 @@ final class AppModel {
 
     private func apply(_ output: TrackerOutput) {
         guard isListening else { return }
-        let displays = output.events.map { EventDisplay($0, sourceLevels: sourceLevels) }.sorted { $0.score > $1.score }
+        // Low/Medium sounds show after two detections; Critical/High at once.
+        let displays = output.events.filter(\.isConfirmed).map { EventDisplay($0, sourceLevels: sourceLevels) }
+            .sorted { $0.score > $1.score }
         events = displays
         if output.directionOnly { return }
         classificationsSeen += 1

@@ -15,6 +15,9 @@ final class MotionProvider {
     /// World bearing (degrees) the user is facing with the phone.
     private(set) var forwardBearing: Double = 0
     var onUpdate: ((Double) -> Void)?
+    /// Called when the phone is tapped or bumped (handling noise reaches the mics through its body).
+    var onHandling: (() -> Void)?
+    private var handling = HandlingDetector()
 
     var isAvailable: Bool { manager.isDeviceMotionAvailable }
 
@@ -41,7 +44,12 @@ final class MotionProvider {
                 SIMD3(Float(r.m31), Float(r.m32), Float(r.m33)),
             ])
             let g = SIMD3(Float(motion.gravity.x), Float(motion.gravity.y), Float(motion.gravity.z))
-            MainActor.assumeIsolated { self?.handle(m: m, gravity: g) }
+            let a = SIMD3(motion.userAcceleration.x, motion.userAcceleration.y, motion.userAcceleration.z)
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if self.handling.update(userAcceleration: a) { self.onHandling?() }
+                self.handle(m: m, gravity: g)
+            }
         }
     }
 

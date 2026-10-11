@@ -16,8 +16,8 @@ struct AmbientTests {
     }
 
     @Test func spikeRuleRidesOnAmbient() {
-        #expect(AmbientTracker.isSpike(level: 58, ambient: 50))
-        #expect(!AmbientTracker.isSpike(level: 57.9, ambient: 50))
+        #expect(AmbientTracker.isSpike(level: 60, ambient: 50))
+        #expect(!AmbientTracker.isSpike(level: 59.9, ambient: 50))
         #expect(!AmbientTracker.isSpike(level: 44, ambient: 30))  // below the 45 dB floor
         #expect(AmbientTracker.isSpike(level: 46, ambient: 30))
         #expect(AmbientTracker.isSpike(level: 92, ambient: 80))

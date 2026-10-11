@@ -48,6 +48,8 @@ struct MainView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            // Screen touches make handling noise too.
+            .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in model.noteHandling() })
             .sheet(isPresented: $showProbe) { ProbeView(model: model) }
             .sheet(isPresented: $showSettings) { SettingsView(model: model) }
         }

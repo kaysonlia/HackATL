@@ -4,7 +4,7 @@ public struct AmbientTracker: Sendable {
     public static let blocksKept = 80
     public static let percentile = 0.2
     /// A block is a spike when it is this many dB above ambient…
-    public static let spikeMargin = 8.0
+    public static let spikeMargin = 10.0
     /// …and at least this loud (approximate dB SPL).
     public static let spikeFloor = 45.0
 

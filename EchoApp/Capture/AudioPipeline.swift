@@ -61,6 +61,9 @@ final class AudioPipeline: @unchecked Sendable {
     private var ambient = AmbientTracker()
     private var ambientDirection = AmbientDirection()
     private var markerTracker = MarkerTracker()
+    private var spikeGate = SpikeGate()
+    private var handlingTimeline = HandlingTimeline()
+    private let handlingUntil = OSAllocatedUnfairLock(initialState: Date.distantPast)
     /// Omni level (approximate dB SPL) per DOA window start, for the tracker and the session log.
     private var levels: [Int64: Double] = [:]
     /// Debug (probe session log): raw labels per window start.
@@ -104,6 +107,11 @@ final class AudioPipeline: @unchecked Sendable {
         set { enabledOptional.withLock { $0 = newValue } }
     }
 
+    /// The phone is being touched or bumped until `date`: ignore sounds around then. Safe from any queue.
+    func noteHandling(until date: Date) {
+        handlingUntil.withLock { $0 = max($0, date) }
+    }
+
     /// Safe to call from any queue.
     func ingest(_ chunk: FOAChunk) {
         queue.async { self.process(chunk) }
@@ -142,14 +150,26 @@ final class AudioPipeline: @unchecked Sendable {
         ambient = AmbientTracker()
         ambientDirection = AmbientDirection()
         markerTracker.reset()
+        spikeGate = SpikeGate()
+        handlingTimeline = HandlingTimeline()
     }
 
     /// 0.1 s block: update ambient; a spike above it becomes an Unclassified marker at once,
     /// anything else feeds the background-direction profile.
     private func processBlock(_ block: FOAWindow) {
         let level = UrgencyScore.level(rms: Double(Self.rms(block.w)))
-        ambient.add(level: level)
         let now = Double(block.startSample) / sampleRate
+        // Touches and bumps: mark the moment (with margin) and skip it entirely.
+        if Date() <= handlingUntil.withLock({ $0 }) {
+            handlingTimeline.mark(from: now - 0.1, to: now + 0.2)
+            _ = spikeGate.feed(level: 0, ambient: ambient.level, bearing: nil, now: now)
+            markerTracker.expire(now: now)
+            onScene?(SceneUpdate(now: now, ambientDB: ambient.level, ambientProfile: ambientDirection.profile,
+                                 markers: markerTracker.snapshot(now: now)))
+            return
+        }
+        handlingTimeline.prune(before: now - 10)
+        ambient.add(level: level)
         let toWorld = deviceToWorld()
         var doa = estimator.estimate(estimator.intensity.analyze(block), windowStart: block.startSample,
                                      calibration: calibration, deviceToWorld: toWorld)
@@ -159,11 +179,11 @@ final class AudioPipeline: @unchecked Sendable {
             tracker.nudge(peaks: doa.peaks, now: now)
             onTracker?(TrackerOutput(events: tracker.events, newEvents: [], now: now, directionOnly: true))
         }
-        if AmbientTracker.isSpike(level: level, ambient: ambient.level) {
-            if doa.diffuseness < 0.9, let peak = doa.peaks.max(by: { $0.weight < $1.weight }) {
-                markerTracker.spike(bearing: peak.bearing, level: level, now: now)
-            }
-        } else {
+        let peak = doa.diffuseness < 0.9 ? doa.peaks.max(by: { $0.weight < $1.weight }) : nil
+        if let spike = spikeGate.feed(level: level, ambient: ambient.level, bearing: peak?.bearing, now: now) {
+            markerTracker.spike(bearing: spike.bearing, level: spike.level, now: now)
+        }
+        if !AmbientTracker.isSpike(level: level, ambient: ambient.level) {
             if !doa.peaks.isEmpty { ambientDirection.add(histogram: doa.histogram) }
         }
         markerTracker.expire(now: now)
@@ -232,6 +252,8 @@ final class AudioPipeline: @unchecked Sendable {
             var doa = estimator.estimate(intensity, windowStart: window.startSample, calibration: cal, deviceToWorld: toWorld)
             // Held upright, the screen plane is vertical: no usable horizontal direction. Keep beliefs as they are.
             if !ForwardHeading.directionUsable(deviceToWorld: toWorld) { doa.peaks = []; doa.diffuseness = 1 }
+            let windowTime = Double(window.startSample) / sampleRate
+            if handlingTimeline.overlaps(windowTime, windowTime + 1) { doa.peaks = []; doa.diffuseness = 1 }
             levels[window.startSample] = UrgencyScore.level(rms: Double(Self.rms(window.w)))
             let cutoff = window.startSample - Int64(8 * acc.hopLength)
             levels = levels.filter { $0.key >= cutoff }
@@ -246,12 +268,13 @@ final class AudioPipeline: @unchecked Sendable {
     private func handle(_ joined: [JoinedWindow]) {
         for j in joined {
             let now = Double(j.windowStart) / sampleRate
-            let active = resources.visibility.shown(activeThresholds.active(j.classification.groupScores),
-                                                    enabled: enabledOptionalGroups)
+            let handled = handlingTimeline.overlaps(now, now + 1)
+            let active = handled ? [:] : resources.visibility.shown(activeThresholds.active(j.classification.groupScores),
+                                                                    enabled: enabledOptionalGroups)
             let level = j.doa.flatMap { levels[$0.windowStart] }
             let created = tracker.ingest(active: active, doa: j.doa, now: now, levelDB: level)
             // A classified sound claims the Unclassified marker it started as.
-            for e in tracker.events where e.lastSeen == now {
+            for e in tracker.events where e.lastSeen == now && e.isConfirmed {
                 markerTracker.claim(group: e.group, bearing: e.showsDirection ? e.belief.peakBearing : nil, windowStart: now)
             }
             onTracker?(TrackerOutput(events: tracker.events, newEvents: created, now: now))
