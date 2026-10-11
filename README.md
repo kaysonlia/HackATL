@@ -45,12 +45,17 @@ Tap **Start Listening**. iOS asks for microphone, motion and notification access
 
 ### The screen
 
-- **Radar:** each sound appears in the direction it comes from, and the radar stays fixed to the room as you turn. **FRONT** is the top edge when the phone lies flat, and the back camera when you hold it upright.
+- **Radar:** each sound appears in the direction it comes from, and the radar stays fixed to the room as you turn. **FRONT** is the phone's top edge.
+- **Keep the phone flat (screen up)**, on a table or face-up in your hand like a compass:
+  - Only the screen plane carries usable direction; the axis through the phone's thickness is biased.
+  - Held upright, direction updates pause and a banner says so.
 - **Arrows:**
-  - A sudden sound shows a blue **"Classifying…"** arrow within about 0.1–0.2 s.
-  - When the sound is recognized, the arrow turns into its name and urgency color.
-  - If it isn't recognized within 5 s, it reads **"Unclassified"** and fades out.
-  - Named sounds update their direction 10 times a second.
+  - A sudden sound shows a blue **"Classifying…"** arrow within about 0.1–0.2 s. The sound must last at least 0.2 s from one direction, or be a single impulse 20 dB over the room.
+  - When the sound is recognized (typically about 0.9 s after it starts), the arrow turns into its name and urgency color.
+  - If it isn't recognized while it lasts plus 1 s (at most 5 s), it reads **"Unclassified"** for 1 s and goes.
+  - Named sounds update their direction 10 times a second, and their arrows hide 1 s after sound stops coming from there.
+  - New sounds near a named arrow join it, and the radar draws one named arrow per spot.
+- **Touching the phone:** taps, bumps and screen touches are detected with the motion sensors and ignored for a quarter-second.
 - **Urgency gradient:** each sound gets a score from 0 to 1, combining its group, how loud it is, and a rough distance. The distance compares the heard level with the sound's typical level at 1 m (`EchoCore/Sources/EchoCore/Resources/source_levels.json`). Green means low, yellow moderate, red urgent. The card under the radar shows the most urgent sound with its volume, distance and direction.
 - **Ambient ring:** a light-blue ring that grows thicker and stronger as the room gets louder. It is thicker on the side the background noise comes from. The `Ambient NN dB · Quiet/Moderate/Loud/Very loud` line sits under the radar. Above 80 dB a banner warns that sounds may be missed.
 - **Volume figures are approximate:** the microphone is uncalibrated.
@@ -65,6 +70,7 @@ Tap **Start Listening**. iOS asks for microphone, motion and notification access
 | Low | Speech |
 
 - **Off by default:** Footsteps, Water Running, Power Tool and Cough/Sneeze. Turn them on in **Settings** (the gear icon).
+- **When sounds appear:** Low and Medium sounds appear after two detections (0.25 s apart); Critical and High sounds appear on the first.
 - **Never shown:** typing, keys, music, appliances, animals other than dogs, and similar background sounds.
 - **More detail:** `docs/superpowers/spikes/2026-10-10-regroup/`.
 
