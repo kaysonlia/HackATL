@@ -80,3 +80,31 @@ extension SoundEvent {
     /// one-window misfires (e.g. a false Door).
     public var isConfirmed: Bool { urgency >= .high || hits >= 2 }
 }
+
+/// Lets short loud sounds through that a 1 s classifier window dilutes. A single gunshot (~0.15 s) is
+/// named by Apple's classifier (top label firecracker/gunshot) but scores 0.44–0.91, under the 0.841
+/// Gunshot threshold. When the window held a loud impulse (≥ 20 dB over the room), a gunshot-family
+/// top label and a group score ≥ 0.5 count. Spike test: 18/20 single bangs caught; 13/120 equally loud
+/// other impulses (claps, cans, glass) slip through, fewer in practice since those are rarely that loud.
+public struct ImpulseAssist: Sendable {
+    public let group: String
+    public let labels: Set<String>
+    public var floor = 0.5
+
+    public init(group: String, labels: Set<String>) {
+        self.group = group
+        self.labels = labels
+    }
+
+    /// The Gunshot/Explosion rule over Apple's labels.
+    public static func gunshot(mapper: LabelMapper) -> ImpulseAssist {
+        let group = "Gunshot/Explosion"
+        return ImpulseAssist(group: group, labels: Set(mapper.labelToGroup.filter { $0.value == group }.keys))
+    }
+
+    public func activates(rawLabels: [String: Double], groupScore: Double, impulseInWindow: Bool) -> Bool {
+        guard impulseInWindow, groupScore >= floor,
+              let top = rawLabels.max(by: { $0.value < $1.value }) else { return false }
+        return labels.contains(top.key)
+    }
+}

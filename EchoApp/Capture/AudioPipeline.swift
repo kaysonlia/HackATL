@@ -63,6 +63,9 @@ final class AudioPipeline: @unchecked Sendable {
     private var markerTracker = MarkerTracker()
     private var spikeGate = SpikeGate()
     private var handlingTimeline = HandlingTimeline()
+    /// Loud impulses (≥ 20 dB over the room), so a classifier window holding one can name a single gunshot.
+    private var impulseTimeline = HandlingTimeline()
+    private let gunshotAssist: ImpulseAssist
     private let handlingUntil = OSAllocatedUnfairLock(initialState: Date.distantPast)
     /// Omni level (approximate dB SPL) per DOA window start, for the tracker and the session log.
     private var levels: [Int64: Double] = [:]
@@ -89,6 +92,7 @@ final class AudioPipeline: @unchecked Sendable {
         // Named sounds leave the list 2 s after their last detection (arrows hide sooner: 1 s of quiet).
         tracker = EventTracker(urgencyMap: resources.urgency, evictAfter: 2)
         activeThresholds = resources.thresholds
+        gunshotAssist = .gunshot(mapper: resources.mapper)
     }
 
     var calibration: FOAAxisCalibration {
@@ -153,6 +157,7 @@ final class AudioPipeline: @unchecked Sendable {
         markerTracker.reset()
         spikeGate = SpikeGate()
         handlingTimeline = HandlingTimeline()
+        impulseTimeline = HandlingTimeline()
     }
 
     /// 0.1 s block: update ambient; a spike above it becomes an Unclassified marker at once,
@@ -170,7 +175,11 @@ final class AudioPipeline: @unchecked Sendable {
             return
         }
         handlingTimeline.prune(before: now - 10)
+        impulseTimeline.prune(before: now - 10)
         ambient.add(level: level)
+        if level >= max(ambient.level + SpikeGate.impulseMargin, AmbientTracker.spikeFloor) {
+            impulseTimeline.mark(from: now, to: now + 0.1)
+        }
         let toWorld = deviceToWorld()
         var doa = estimator.estimate(estimator.intensity.analyze(block), windowStart: block.startSample,
                                      calibration: calibration, deviceToWorld: toWorld)
@@ -273,8 +282,15 @@ final class AudioPipeline: @unchecked Sendable {
         for j in joined {
             let now = Double(j.windowStart) / sampleRate
             let handled = handlingTimeline.overlaps(now, now + 1)
-            let active = handled ? [:] : resources.visibility.shown(activeThresholds.active(j.classification.groupScores),
+            var active = handled ? [:] : resources.visibility.shown(activeThresholds.active(j.classification.groupScores),
                                                                     enabled: enabledOptionalGroups)
+            // Single gunshots: a loud impulse in the window plus a gunshot-type top label (Apple's classifier only).
+            if !handled, classifierKind == .apple, active[gunshotAssist.group] == nil,
+               let score = j.classification.groupScores[gunshotAssist.group],
+               gunshotAssist.activates(rawLabels: rawLabels[j.windowStart] ?? [:], groupScore: score,
+                                       impulseInWindow: impulseTimeline.overlaps(now, now + 1)) {
+                active[gunshotAssist.group] = score
+            }
             let level = j.doa.flatMap { levels[$0.windowStart] }
             let created = tracker.ingest(active: active, doa: j.doa, now: now, levelDB: level)
             // A classified sound claims the Unclassified marker it started as.

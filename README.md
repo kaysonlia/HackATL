@@ -78,6 +78,7 @@ Tap **Start Listening**. iOS asks for microphone, motion and notification access
   | ≥ 0.5 | double |
   | ≥ 0.3 | single |
 
+- **Single gunshots:** a 0.15 s bang fills little of the classifier's 1 s window, so with the app open a loud impulse (≥ 20 dB over the room) plus a gunshot-type top label counts at a score of 0.5 instead of 0.84. This caught 18 of 20 test bangs. The locked-phone classifier (YAMNet) doesn't use this rule, because it confuses other loud impulses too often.
 - **VoiceOver** announces urgent sounds with a clock direction, e.g. "behind you to the right (4 o'clock)".
 
 ### While locked
