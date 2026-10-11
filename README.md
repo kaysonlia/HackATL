@@ -33,6 +33,84 @@ swift test --package-path EchoCore
 
 | Path | What |
 |---|---|
-| `EchoCore/` | Pure Swift logic: FOA intensity, direction finding, axis calibration, label mapping, event tracking |
-| `EchoApp/` | iOS app: capture, SoundAnalysis, motion, haptics, SwiftUI, FOA probe |
-| `docs/superpowers/` | Spec, spike results and implementation plans |
+| `EchoCore/` | Pure Swift logic: FOA intensity, direction finding, axis calibration and orientation correction, label mapping, YAMNet frontend, urgency score, event tracking, ambient level and new-sound markers |
+| `EchoApp/` | iOS app: capture, SoundAnalysis and YAMNet classifiers, motion, haptics, notifications, SwiftUI, Settings, FOA probe |
+| `EchoShared/` | Code shared by the app and the Live Activity (urgency colors, activity attributes) |
+| `EchoLiveActivity/` | Widget extension: lock-screen bar and Dynamic Island |
+| `docs/superpowers/` | Specs, spike and device-test results, implementation plans |
+
+## Using SoundSightAI
+
+Tap **Start Listening**. iOS asks for microphone, motion and notification access.
+
+### The screen
+
+- **Radar:** each sound appears in the direction it comes from, and the radar stays fixed to the room as you turn. **FRONT** is the top edge when the phone lies flat, and the back camera when you hold it upright.
+- **Arrows:**
+  - A sudden sound shows a blue **"Classifying…"** arrow within about 0.1–0.2 s.
+  - When the sound is recognized, the arrow turns into its name and urgency color.
+  - If it isn't recognized within 5 s, it reads **"Unclassified"** and fades out.
+  - Named sounds update their direction 10 times a second.
+- **Urgency gradient:** each sound gets a score from 0 to 1, combining its group, how loud it is, and a rough distance. The distance compares the heard level with the sound's typical level at 1 m (`EchoCore/Sources/EchoCore/Resources/source_levels.json`). Green means low, yellow moderate, red urgent. The card under the radar shows the most urgent sound with its volume, distance and direction.
+- **Ambient ring:** a light-blue ring that grows thicker and stronger as the room gets louder. It is thicker on the side the background noise comes from. The `Ambient NN dB · Quiet/Moderate/Loud/Very loud` line sits under the radar. Above 80 dB a banner warns that sounds may be missed.
+- **Volume figures are approximate:** the microphone is uncalibrated.
+
+### Sound groups
+
+| Urgency | Groups |
+|---|---|
+| Critical | Siren, Smoke Alarm, Gunshot/Explosion |
+| High | Traffic Warning, Screaming/Shouting, Crash/Glass Breaking |
+| Medium | Vehicle, Door, Phone Ringing, Baby/Crying, Dog, Beeping/Timer |
+| Low | Speech |
+
+- **Off by default:** Footsteps, Water Running, Power Tool and Cough/Sneeze. Turn them on in **Settings** (the gear icon).
+- **Never shown:** typing, keys, music, appliances, animals other than dogs, and similar background sounds.
+- **More detail:** `docs/superpowers/spikes/2026-10-10-regroup/`.
+
+### Alerts
+
+- **Haptics** (app open), set by score:
+
+  | Score | Haptic |
+  |---|---|
+  | ≥ 0.75 | triple pulse |
+  | ≥ 0.5 | double |
+  | ≥ 0.3 | single |
+
+- **VoiceOver** announces urgent sounds with a clock direction, e.g. "behind you to the right (4 o'clock)".
+
+### While locked
+
+- **Listening continues:** once you tap Start Listening, SoundSightAI keeps listening when you lock the phone or switch apps, and the orange mic indicator stays on.
+- **Classifier:** iOS stops Apple's sound classifier in the background, so YAMNet (run on the CPU) takes over. It is less accurate.
+- **Lock-screen bar:** a Live Activity shows the most urgent sound with a direction arrow, on the lock screen and in the Dynamic Island. Turn it off in Settings › SoundSightAI › Live Activities.
+- **Urgent notification:** an urgent sound posts one notification, at most one every 10 s. It needs two detections first, and each new one replaces the last instead of stacking.
+
+### Demo mode
+
+Clips played from a laptop or phone are much quieter than real sirens, so they look far away and less urgent. **Settings › Demo mode** assumes speaker playback: play clips near full volume and a nearby siren shows red. Turn it off for real-world use.
+
+### FOA probe (debug)
+
+Long-press the **SoundSightAI** title to open the probe. It provides:
+- the live 4-channel format and levels;
+- a raw direction dial;
+- calibration recording and fitting;
+- a classifier switch (force YAMNet);
+- a per-window session log (Share log);
+- recent detections, marked `(background)` when detected while locked.
+
+Diagnostics are also written to `Documents/diagnostics.log` in the app container. Copy it to the Mac with:
+
+```sh
+xcrun devicectl device copy from --device <id> --domain-type appDataContainer \
+  --domain-identifier com.hackatl.soundsight --source Documents/diagnostics.log --destination diagnostics.log
+```
+
+### Device findings worth knowing
+
+- **iOS rotates FOA capture to the phone's upright orientation.** It only tracks changes made after capture starts, and defaults to the camera sensor's landscape. The app corrects for this (`FOAOrientationCompensation`).
+- **Taking control of the `AVAudioSession` disables FOA**, so the capture session configures the audio session itself.
+- **Apple's sound feature extractor fails in the background.** This affects both SoundAnalysis and Create ML sound classifiers, hence the YAMNet fallback.
+
