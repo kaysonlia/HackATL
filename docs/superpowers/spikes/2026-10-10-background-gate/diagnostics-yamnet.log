@@ -1,0 +1,39 @@
+10:33:38 PM  classifier: Apple built-in (SoundAnalysis)
+10:33:40 PM  Typing/Keyboard
+10:33:40 PM  Siren
+10:33:54 PM  Skidding/Tire Squeal
+10:34:08 PM  Music
+10:34:27 PM  → background  (background)
+10:34:27 PM  classifier: YAMNet on CPU  (background)
+10:34:28 PM  Appliance/Kitchen  (background)
+10:34:31 PM  Music  (background)
+10:34:32 PM  TV/Radio  (background)
+10:34:33 PM  Keys Jangling  (background)
+10:34:33 PM  Glass Shatter  (background)
+10:34:39 PM  Music  (background)
+10:34:46 PM  Speech  (background)
+10:34:52 PM  Siren  (background)
+10:35:00 PM  Siren  (background)
+10:35:02 PM  Music  (background)
+10:35:07 PM  Body Sounds  (background)
+10:35:15 PM  Music  (background)
+10:35:16 PM  → foreground: 98 audio windows, 97 classifications while away
+10:35:16 PM  classifier: Apple built-in (SoundAnalysis)
+10:35:39 PM  classifier: YAMNet on CPU
+10:35:41 PM  Siren
+10:35:42 PM  Music
+10:35:46 PM  Gunshot/Explosion
+10:35:47 PM  → background  (background)
+10:35:48 PM  Speech  (background)
+10:35:57 PM  Speech  (background)
+10:36:03 PM  Speech  (background)
+10:36:14 PM  Speech  (background)
+10:36:24 PM  Cough/Sneeze  (background)
+10:36:24 PM  Body Sounds  (background)
+10:36:25 PM  Speech  (background)
+10:36:32 PM  Music  (background)
+10:36:33 PM  Siren  (background)
+10:36:33 PM  Vehicle  (background)
+10:36:37 PM  Vehicle  (background)
+10:37:09 PM  Keys Jangling  (background)
+10:37:10 PM  → foreground: 165 audio windows, 165 classifications while away

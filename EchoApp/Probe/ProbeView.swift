@@ -6,6 +6,7 @@ struct ProbeView: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var csvURL: URL?
+    @State private var sessionURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -47,6 +48,31 @@ struct ProbeView: View {
                     LabeledContent("Current", value: model.calibration.rows.map { $0.map { String(Int($0)) }.joined(separator: " ") }.joined(separator: " | "))
                     Button("Reset to initial guess") { model.calibration = .initialGuess }
                     Button("Clear samples", role: .destructive) { model.probe.clearSamples() }
+                }
+                Section("Classifier") {
+                    Toggle("Force YAMNet (CPU)", isOn: $model.forceYAMNet)
+                    Text("Apple's classifier is used while SoundSight is open; YAMNet takes over automatically when the phone locks.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("Session log (debug)") {
+                    Toggle("Record session log", isOn: $model.probe.isLoggingSession)
+                        .disabled(!model.isListening)
+                    LabeledContent("Windows logged", value: "\(model.probe.sessionLines.count)")
+                    Text("Set True direction (above) before each clip; it's saved with every line.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button("Prepare log") { sessionURL = model.exportSessionLog() }
+                        .disabled(model.probe.sessionLines.isEmpty)
+                    if let sessionURL { ShareLink("Share log", item: sessionURL) }
+                    Button("Clear log", role: .destructive) { model.probe.clearSession() }
+                }
+                Section("Recent detections") {
+                    if model.probe.recentDetections.isEmpty { Text("None yet").foregroundStyle(.secondary) }
+                    ForEach(Array(model.probe.recentDetections.enumerated()), id: \.offset) {
+                        Text($0.element).font(.caption.monospaced()).textSelection(.enabled)
+                    }
+                    if !model.probe.recentDetections.isEmpty {
+                        ShareLink("Share detections", item: model.probe.recentDetections.joined(separator: "\n"))
+                    }
                 }
                 Section("Export") {
                     Button("Prepare CSV") { csvURL = model.exportProbeCSV() }

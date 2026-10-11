@@ -45,6 +45,28 @@ final class AppModel {
     var events: [EventDisplay] = []
     var forwardBearing: Double = 0
     var classifierWarning: String?
+    /// Set from the scene phase; false while backgrounded or locked.
+    /// Debug: classify with YAMNet even in the foreground (it always runs in the background).
+    var forceYAMNet = false {
+        didSet { pipeline?.useYAMNet = forceYAMNet || !isForeground }
+    }
+    var isForeground = true {
+        didSet {
+            // SoundAnalysis fails in the background; YAMNet on the CPU keeps classifying.
+            pipeline?.useYAMNet = forceYAMNet || !isForeground
+            guard oldValue != isForeground, isListening else { return }
+            // Debug: how much audio and how many classifications arrived while away (background gate).
+            probe.logDetection(isForeground
+                ? "→ foreground: \(windowsSeen - windowsAtBackground) audio windows, \(classificationsSeen - classificationsAtBackground) classifications while away"
+                : "→ background", inBackground: !isForeground, at: Date())
+            windowsAtBackground = windowsSeen
+            classificationsAtBackground = classificationsSeen
+        }
+    }
+    @ObservationIgnored private var windowsSeen = 0
+    @ObservationIgnored private var classificationsSeen = 0
+    @ObservationIgnored private var windowsAtBackground = 0
+    @ObservationIgnored private var classificationsAtBackground = 0
     var probe = ProbeState()
     var calibration: FOAAxisCalibration {
         didSet {
@@ -74,7 +96,25 @@ final class AppModel {
             pipeline.calibration = calibration
             pipeline.onWindow = { [weak self] summary in Task { @MainActor in self?.apply(summary) } }
             pipeline.onTracker = { [weak self] output in Task { @MainActor in self?.apply(output) } }
-            pipeline.onError = { [weak self] message in Task { @MainActor in self?.classifierWarning = message } }
+            pipeline.onError = { [weak self] message in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.classifierWarning = message
+                    self.probe.logDetection("ERROR \(message)", inBackground: !self.isForeground, at: Date())
+                }
+            }
+            pipeline.onNote = { [weak self] note in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.probe.logDetection(note, inBackground: !self.isForeground, at: Date())
+                }
+            }
+            pipeline.onDebugLine = { [weak self] line in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.probe.appendSession(line, forward: self.forwardBearing)
+                }
+            }
             capture.onChunk = { chunk in pipeline.ingest(chunk) }
             self.pipeline = pipeline
         } catch {
@@ -136,13 +176,26 @@ final class AppModel {
         }
     }
 
+    func exportSessionLog() -> URL? {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("echo-session-\(Int(Date().timeIntervalSince1970)).txt")
+        do {
+            try probe.sessionLog().write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
     private func apply(_ summary: WindowSummary) {
+        windowsSeen += 1
         probe.ingest(summary, calibration: calibration, now: Date())
     }
 
     private func apply(_ output: TrackerOutput) {
         guard isListening else { return }
         events = output.events.map(EventDisplay.init)
+        classificationsSeen += 1
+        for e in output.newEvents { probe.logDetection(e.group, inBackground: !isForeground, at: Date()) }
         for e in output.events where e.lastSeen == output.now {
             haptics.alert(group: e.group, urgency: e.urgency, now: output.now)
         }

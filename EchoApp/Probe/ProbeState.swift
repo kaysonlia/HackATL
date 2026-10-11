@@ -17,6 +17,11 @@ struct ProbeState {
     private(set) var samples: [CalibrationSample] = []
     private(set) var csvRows: [String] = []
     var fit: CalibrationFit?
+    /// Newest first: "12:03:04  Siren  (background)". Lets the background gate be checked after unlocking.
+    private(set) var recentDetections: [String] = []
+    /// Debug session log: one line per joined window while recording, prefixed with the selected angle.
+    var isLoggingSession = false
+    private(set) var sessionLines: [String] = []
 
     var isRecording: Bool { recordingUntil != nil }
 
@@ -43,6 +48,42 @@ struct ProbeState {
         samples.append(CalibrationSample(trueBearing: selectedAngle, raw: s.summedRaw))
         csvRows.append([String(selectedAngle), String(s.summedRaw.x), String(s.summedRaw.y), String(s.summedRaw.z),
                         String(s.diffuseness), String(s.totalEnergy), String(now.timeIntervalSince1970)].joined(separator: ","))
+    }
+
+    mutating func logDetection(_ group: String, inBackground: Bool, at date: Date) {
+        let time = date.formatted(date: .omitted, time: .standard)
+        let line = "\(time)  \(group)\(inBackground ? "  (background)" : "")"
+        recentDetections.insert(line, at: 0)
+        Self.appendToDiagnosticsFile(line)
+        if recentDetections.count > 40 { recentDetections.removeLast() }
+    }
+
+    /// `forward` is the world bearing the phone faces, so world peaks can be read relative to the phone.
+    mutating func appendSession(_ line: String, forward: Double) {
+        guard isLoggingSession else { return }
+        sessionLines.append("\(Int(selectedAngle));\(Int(forward.rounded()));\(line)")
+    }
+
+    mutating func clearSession() { sessionLines = [] }
+
+    func sessionLog() -> String {
+        (["true_bearing;forward;t;level_db;diffuseness;doa_peaks;top_labels;group_scores;active;events"] + sessionLines)
+            .joined(separator: "\n") + "\n"
+    }
+
+    /// Debug: Documents/diagnostics.log, readable from the Mac with
+    /// `xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier com.hackatl.soundsight`.
+    static func appendToDiagnosticsFile(_ line: String) {
+        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let url = dir.appendingPathComponent("diagnostics.log")
+        let data = Data((line + "\n").utf8)
+        if let handle = try? FileHandle(forWritingTo: url) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: url)
+        }
     }
 
     mutating func clearSamples() {

@@ -1,3 +1,4 @@
+import CoreML
 import EchoCore
 import Foundation
 import os
@@ -18,34 +19,64 @@ struct TrackerOutput: Sendable {
     var now: Double
 }
 
-/// Chunk → SoundAnalysis + 1 s windows → DOA → joiner → EventTracker, all on one serial queue (spec §3).
+/// Chunk → classifier + 1 s windows → DOA → joiner → EventTracker, all on one serial queue (spec §3).
+/// Classifies with Apple's SoundAnalysis in the foreground and YAMNet on the CPU in the background,
+/// where SoundAnalysis fails; a classifier that errors is rebuilt.
 final class AudioPipeline: @unchecked Sendable {
+    enum ClassifierKind: Sendable { case apple, yamnet }
+
     private let queue = DispatchQueue(label: "echo.pipeline")
     private let resources: ClassificationResources
+    private let yamnet: YAMNetResources
+    private let yamnetFrontend: YAMNetFrontend
+    private let yamnetModel: MLModel?
     private let estimator: DOAEstimator
     private let tracker: EventTracker
     private let state = OSAllocatedUnfairLock(initialState: FOAAxisCalibration.initialGuess)
+    private let wantsYAMNet = OSAllocatedUnfairLock(initialState: false)
     private let deviceToWorld: @Sendable () -> simd_float3x3
 
     private var sampleRate: Double = 0
+    private var samplesSeen: Int64 = 0
     private var accumulator: WindowAccumulator?
     private var joiner: WindowJoiner?
     private var classifier: (any SoundClassifier)?
+    private var classifierKind: ClassifierKind?
+    private var classifierFailedAt: Int64?
+    private var activeThresholds: GroupThresholds
+    /// Debug (probe session log): raw labels and omni level per window start.
+    private var rawLabels: [Int64: [String: Double]] = [:]
+    private var debugLevels: [Int64: Double] = [:]
 
     var onWindow: (@Sendable (WindowSummary) -> Void)?
     var onTracker: (@Sendable (TrackerOutput) -> Void)?
     var onError: (@Sendable (String) -> Void)?
+    /// Debug: one `;`-separated line per joined window for the probe's session log.
+    var onDebugLine: (@Sendable (String) -> Void)?
+    /// Debug: one-off notes for the probe's Recent detections (e.g. which classifier is active).
+    var onNote: (@Sendable (String) -> Void)?
 
     init(resources: ClassificationResources, deviceToWorld: @escaping @Sendable () -> simd_float3x3) throws {
         self.resources = resources
         self.deviceToWorld = deviceToWorld
+        yamnet = try YAMNetResources.bundled()
+        yamnetFrontend = try YAMNetFrontend.bundled()
+        // Loaded up front, in the foreground, so switching on lock is instant.
+        yamnetModel = try? YAMNetClassifier.loadModel()
         estimator = try DOAEstimator()
         tracker = EventTracker(urgencyMap: resources.urgency)
+        activeThresholds = resources.thresholds
     }
 
     var calibration: FOAAxisCalibration {
         get { state.withLock { $0 } }
         set { state.withLock { $0 = newValue } }
+    }
+
+    /// True while the app is not in the foreground (or when forced from the probe): classify with YAMNet.
+    var useYAMNet: Bool {
+        get { wantsYAMNet.withLock { $0 } }
+        set { wantsYAMNet.withLock { $0 = newValue } }
     }
 
     /// Safe to call from any queue.
@@ -56,31 +87,71 @@ final class AudioPipeline: @unchecked Sendable {
     func reset() {
         queue.async {
             self.sampleRate = 0
+            self.samplesSeen = 0
             self.accumulator = nil
             self.joiner = nil
             self.classifier = nil
+            self.classifierKind = nil
+            self.classifierFailedAt = nil
+            self.rawLabels = [:]
+            self.debugLevels = [:]
             self.tracker.reset()
         }
     }
 
     private func setUp(sampleRate: Double) {
         self.sampleRate = sampleRate
+        samplesSeen = 0
         let acc = WindowAccumulator.forSampleRate(sampleRate)
         accumulator = acc
         joiner = WindowJoiner(hopLength: acc.hopLength)
+        classifier = nil
+        classifierKind = nil
+    }
+
+    /// Builds the classifier the app currently wants, starting at the current capture sample.
+    private func makeClassifier(_ kind: ClassifierKind) {
+        classifierKind = kind
+        classifierFailedAt = nil
         do {
-            let c: any SoundClassifier = try SoundAnalysisClassifier(sampleRate: sampleRate, mapper: resources.mapper)
+            let c: any SoundClassifier
+            switch kind {
+            case .apple:
+                c = try SoundAnalysisClassifier(sampleRate: sampleRate, mapper: resources.mapper, startSample: samplesSeen)
+                activeThresholds = resources.thresholds
+                onNote?("classifier: Apple built-in (SoundAnalysis)")
+            case .yamnet:
+                guard let yamnetModel else { throw ResourceError.missing("YAMNet.mlmodelc") }
+                c = try YAMNetClassifier(sampleRate: sampleRate, model: yamnetModel, frontend: yamnetFrontend,
+                                         mapper: yamnet.mapper, startSample: samplesSeen)
+                activeThresholds = yamnet.thresholds
+                onNote?("classifier: YAMNet on CPU")
+            }
+            c.onLabels = { [unowned self] start, labels in self.rawLabels[start] = labels }
             c.onFrame = { [unowned self] frame in self.handle(self.joiner?.add(classification: frame) ?? []) }
-            c.onError = { [onError] error in onError?("Sound classifier error: \(error.localizedDescription)") }
+            c.onError = { [unowned self] error in
+                let ns = error as NSError
+                let underlying = (ns.userInfo[NSUnderlyingErrorKey] as? NSError).map { " ← \($0.domain) \($0.code): \($0.localizedDescription)" } ?? ""
+                self.onError?("Sound classifier error: \(ns.domain) \(ns.code): \(ns.localizedDescription)\(underlying)")
+                if self.classifierFailedAt == nil { self.classifierFailedAt = self.samplesSeen }
+            }
             classifier = c
         } catch {
+            classifier = nil
+            classifierFailedAt = samplesSeen
             onError?("Sound classifier unavailable: \(error.localizedDescription)")
         }
     }
 
     private func process(_ chunk: FOAChunk) {
         if chunk.sampleRate != sampleRate { setUp(sampleRate: chunk.sampleRate) }
+        let wanted: ClassifierKind = useYAMNet ? .yamnet : .apple
+        // Switch on foreground/background changes; rebuild a failed classifier after 2 s.
+        if wanted != classifierKind || classifierFailedAt.map({ samplesSeen - $0 >= Int64(2 * sampleRate) }) == true {
+            makeClassifier(wanted)
+        }
         classifier?.analyze(chunk.w)
+        samplesSeen += Int64(chunk.w.count)
         guard var acc = accumulator else { return }
         let windows = acc.append(w: chunk.w, x: chunk.x, y: chunk.y, z: chunk.z, sampleRate: chunk.sampleRate)
         accumulator = acc
@@ -88,6 +159,11 @@ final class AudioPipeline: @unchecked Sendable {
         for window in windows {
             let intensity = estimator.intensity.analyze(window)
             let doa = estimator.estimate(intensity, windowStart: window.startSample, calibration: cal, deviceToWorld: deviceToWorld())
+            let w = Double(Self.rms(window.w))
+            debugLevels[window.startSample] = w > 0 ? 20 * log10(w) + 120 : 0
+            let cutoff = window.startSample - Int64(8 * acc.hopLength)
+            debugLevels = debugLevels.filter { $0.key >= cutoff }
+            rawLabels = rawLabels.filter { $0.key >= cutoff }
             onWindow?(WindowSummary(summedRaw: intensity.summedRaw, diffuseness: intensity.diffuseness,
                                     totalEnergy: intensity.totalEnergy,
                                     channelRMS: [window.w, window.x, window.y, window.z].map(Self.rms), doa: doa))
@@ -98,10 +174,23 @@ final class AudioPipeline: @unchecked Sendable {
     private func handle(_ joined: [JoinedWindow]) {
         for j in joined {
             let now = Double(j.windowStart) / sampleRate
-            let active = resources.thresholds.active(j.classification.groupScores)
+            let active = activeThresholds.active(j.classification.groupScores)
             let created = tracker.ingest(active: active, doa: j.doa, now: now)
             onTracker?(TrackerOutput(events: tracker.events, newEvents: created, now: now))
+            if let onDebugLine { onDebugLine(debugLine(j, active: active, now: now)) }
         }
+    }
+
+    /// t;level_db;diffuseness;doa_peaks;top_labels;group_scores;active;events
+    private func debugLine(_ j: JoinedWindow, active: [String: Double], now: Double) -> String {
+        func f(_ x: Double) -> String { String(format: "%.2f", x) }
+        let level = j.doa.flatMap { debugLevels[$0.windowStart] }.map { String(format: "%.1f", $0) } ?? ""
+        let peaks = j.doa?.peaks.map { "\(Int($0.bearing.rounded()))@\(f($0.weight))" }.joined(separator: " ") ?? ""
+        let top = (rawLabels[j.windowStart] ?? [:]).sorted { $0.value > $1.value }.prefix(5).map { "\($0.key):\(f($0.value))" }
+        let groups = j.classification.groupScores.filter { $0.value >= 0.2 }.sorted { $0.value > $1.value }.map { "\($0.key):\(f($0.value))" }
+        let events = tracker.events.map { "\($0.group)@\(Int($0.belief.peakBearing.rounded()))/R\(f($0.belief.concentration))" }
+        return [f(now), level, j.doa.map { f($0.diffuseness) } ?? "", peaks, top.joined(separator: " "), groups.joined(separator: " "),
+                active.keys.sorted().joined(separator: " "), events.joined(separator: " ")].joined(separator: ";")
     }
 
     private static func rms(_ x: [Float]) -> Float {
