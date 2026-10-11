@@ -1,7 +1,7 @@
 import EchoCore
 import UserNotifications
 
-/// The single urgent notification (urgency spec §6). Every request uses the same identifier, so a new
+/// The single notification for moderate and urgent sounds (urgency spec §6). Every request uses the same identifier, so a new
 /// alert replaces the delivered one instead of stacking. Rate-limited by `NotificationPolicy`.
 @MainActor
 final class UrgentNotifier {
@@ -18,11 +18,11 @@ final class UrgentNotifier {
 
     /// Posts for the most urgent event the policy lets through, if any. `events` is sorted by score.
     func consider(_ events: [EventDisplay], forward: Double, now: Double, isForeground: Bool) {
-        for e in events where e.band == .urgent {
+        for e in events where e.band != .low {
             guard policy.shouldNotify(group: e.group, score: e.score, now: now, isForeground: isForeground, hits: e.hits) else { continue }
             let content = UNMutableNotificationContent()
             content.title = "\(e.group): \(e.directionPhrase(forward: forward))"
-            content.body = e.levelText.map { "\($0) away" } ?? "Urgent sound nearby"
+            content.body = e.levelText.map { "\($0) away" } ?? "\(e.band.label) sound nearby"
             content.sound = .default
             content.interruptionLevel = .active
             center.add(UNNotificationRequest(identifier: NotificationPolicy.identifier, content: content, trigger: nil),

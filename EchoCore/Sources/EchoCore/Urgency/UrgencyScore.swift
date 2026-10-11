@@ -6,8 +6,10 @@ public enum UrgencyScore {
     /// reads about −45 dBFS on the omni channel and typing nearby −40 to −30, so +80 maps them to ~35 and
     /// 40–50 dB SPL. (The first guess, +120, made a silent room read 77 dB.) Uncalibrated; tune on device.
     public static let dbOffset = 80.0
-    /// Scores at or above this are "Urgent": notification, VoiceOver announcement, triple haptic.
+    /// Scores at or above this are "Urgent": VoiceOver announcement, triple haptic.
     public static let urgentThreshold = 0.75
+    /// Scores at or above this are "Moderate" or higher, and post a notification in the background.
+    public static let moderateThreshold = 0.4
 
     public static func classWeight(_ urgency: Urgency) -> Double {
         switch urgency {
@@ -64,7 +66,7 @@ public enum UrgencyBand: Sendable, Equatable {
     case low, moderate, urgent
 
     public init(score: Double) {
-        self = score >= UrgencyScore.urgentThreshold ? .urgent : score >= 0.4 ? .moderate : .low
+        self = score >= UrgencyScore.urgentThreshold ? .urgent : score >= UrgencyScore.moderateThreshold ? .moderate : .low
     }
 
     public var label: String {

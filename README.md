@@ -93,7 +93,7 @@ Tap **Start Listening**. iOS asks for microphone, motion and notification access
 - **Listening continues:** once you tap Start Listening, SoundSight keeps listening when you lock the phone or switch apps, and the orange mic indicator stays on.
 - **Classifier:** iOS stops Apple's sound classifier in the background, so YAMNet (run on the CPU) takes over. It is less accurate.
 - **Lock-screen bar:** a Live Activity shows the most urgent sound with a direction arrow, on the lock screen and in the Dynamic Island. Turn it off in Settings › SoundSight › Live Activities.
-- **Urgent notification:** an urgent sound posts one notification, at most one every 10 s. It needs two detections first, and each new one replaces the last instead of stacking.
+- **Notifications:** a moderate or urgent sound posts one notification while the app is in the background, at most one every 10 s (an urgent sound can follow a moderate one sooner). It needs two detections first, and each new one replaces the last instead of stacking.
 
 ### Demo mode
 

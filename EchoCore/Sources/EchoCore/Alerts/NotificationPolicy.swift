@@ -1,5 +1,6 @@
-/// When to post the urgent notification (urgency spec §6). Every notification reuses one
-/// identifier, so a new one replaces the last instead of stacking.
+/// When to post a notification for a moderate or urgent sound (urgency spec §6). Every notification
+/// reuses one identifier, so a new one replaces the last instead of stacking. An urgent sound isn't
+/// held back by the global gap after a moderate notification.
 public struct NotificationPolicy: Sendable {
     public static let identifier = "echo.urgent"
 
@@ -9,6 +10,7 @@ public struct NotificationPolicy: Sendable {
     /// Detections an event needs before it may notify; filters one-window false alarms.
     public var minHits = 2
     private var lastAny: Double?
+    private var lastWasUrgent = false
     private var lastByGroup: [String: (time: Double, score: Double)] = [:]
 
     public init() {}
@@ -20,10 +22,12 @@ public struct NotificationPolicy: Sendable {
             self.lastAny = nil
             lastByGroup = [:]
         }
-        guard !isForeground, score >= UrgencyScore.urgentThreshold, hits >= minHits else { return false }
-        if let lastAny, now - lastAny < minGap { return false }
+        guard !isForeground, score >= UrgencyScore.moderateThreshold, hits >= minHits else { return false }
+        let urgent = score >= UrgencyScore.urgentThreshold
+        if let lastAny, now - lastAny < minGap, !(urgent && !lastWasUrgent) { return false }
         if let last = lastByGroup[group], now - last.time < groupCooldown, score < last.score + scoreRise { return false }
         lastAny = now
+        lastWasUrgent = urgent
         lastByGroup[group] = (now, score)
         return true
     }
