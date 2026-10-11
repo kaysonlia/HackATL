@@ -14,7 +14,7 @@ struct StatusBanner: View {
             case .interrupted:
                 banner("Paused: another app is using the microphone.", systemImage: "pause.circle")
             case .permissionDenied:
-                banner("SoundSight needs microphone access to hear sounds around you.", systemImage: "mic.slash") {
+                banner("SoundSightAI needs microphone access to hear sounds around you.", systemImage: "mic.slash") {
                     Button("Open Settings") {
                         if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                     }

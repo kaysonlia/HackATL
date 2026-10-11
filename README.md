@@ -1,6 +1,6 @@
-# SoundSight for iPhone
+# SoundSightAI
 
-Real-time, on-device sound awareness for deaf and hard-of-hearing users: an iOS app for the **iPhone 16 Pro Max**. It classifies environmental sounds, ranks their urgency, and shows where each one is coming from on a full 360° radar, using the phone's microphone array as First-Order Ambisonics (FOA).
+Real-time, on-device sound awareness for deaf and hard-of-hearing users. SoundSightAI is an iOS app for the **iPhone 16 Pro Max**. It classifies environmental sounds, ranks their urgency, and shows where each one is coming from on a full 360° radar, using the phone's microphone array as First-Order Ambisonics (FOA).
 
 Design: [`docs/superpowers/specs/2026-10-10-soundsight-ios-foa-design.md`](docs/superpowers/specs/2026-10-10-soundsight-ios-foa-design.md)
 

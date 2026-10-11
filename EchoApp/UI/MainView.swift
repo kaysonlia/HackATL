@@ -28,7 +28,7 @@ struct MainView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("SoundSight")
+                    Text("SoundSightAI")
                         .font(.headline)
                         .onLongPressGesture { showProbe = true }
                         .accessibilityHint("Long-press to open the FOA probe")

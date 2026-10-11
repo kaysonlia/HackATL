@@ -51,7 +51,7 @@ struct ProbeView: View {
                 }
                 Section("Classifier") {
                     Toggle("Force YAMNet (CPU)", isOn: $model.forceYAMNet)
-                    Text("Apple's classifier is used while SoundSight is open; YAMNet takes over automatically when the phone locks.")
+                    Text("Apple's classifier is used while SoundSightAI is open; YAMNet takes over automatically when the phone locks.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Session log (debug)") {
