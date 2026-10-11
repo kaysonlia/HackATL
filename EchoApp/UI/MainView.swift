@@ -1,3 +1,4 @@
+import EchoCore
 import SwiftUI
 
 struct MainView: View {
@@ -10,8 +11,15 @@ struct MainView: View {
             ScrollView {
                 VStack(spacing: 16) {
                     StatusBanner(status: model.status, notes: model.notes)
-                    RadarView(events: model.events, forward: model.forwardBearing, listeningSince: model.listeningSince)
+                    RadarView(events: model.events, markers: model.markers, ambientDB: model.ambientDB,
+                              ambientProfile: model.ambientProfile, forward: model.forwardBearing, listeningSince: model.listeningSince)
                         .aspectRatio(1, contentMode: .fit)
+                    if let ambient = model.ambientDB {
+                        Label("Ambient \(Int(ambient.rounded())) dB · \(AmbientTracker.word(for: ambient))", systemImage: "circle.dashed")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Ambient \(Int(ambient.rounded())) decibels, \(AmbientTracker.word(for: ambient))")
+                    }
                     FocusCard(event: model.events.first, forward: model.forwardBearing, isListening: model.isListening)
                     EventListView(events: Array(model.events.dropFirst()), forward: model.forwardBearing)
                 }

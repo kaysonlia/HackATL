@@ -13,6 +13,14 @@ struct WindowSummary: Sendable {
     var doa: DOAFrame
 }
 
+/// Every 0.1 s: the room's ambient level, where it comes from, and the Unclassified markers.
+struct SceneUpdate: Sendable {
+    var now: Double
+    var ambientDB: Double
+    var ambientProfile: [Double]
+    var markers: [SoundMarker]
+}
+
 struct TrackerOutput: Sendable {
     var events: [SoundEvent]
     var newEvents: [SoundEvent]
@@ -45,6 +53,12 @@ final class AudioPipeline: @unchecked Sendable {
     private var classifierKind: ClassifierKind?
     private var classifierFailedAt: Int64?
     private var activeThresholds: GroupThresholds
+    /// 0.1 s blocks for ambient tracking and instant "Unclassified" arrows.
+    private var blockBuffer: [[Float]] = [[], [], [], []]
+    private var blockStart: Int64 = 0
+    private var ambient = AmbientTracker()
+    private var ambientDirection = AmbientDirection()
+    private var markerTracker = MarkerTracker()
     /// Omni level (approximate dB SPL) per DOA window start, for the tracker and the session log.
     private var levels: [Int64: Double] = [:]
     /// Debug (probe session log): raw labels per window start.
@@ -52,6 +66,7 @@ final class AudioPipeline: @unchecked Sendable {
 
     var onWindow: (@Sendable (WindowSummary) -> Void)?
     var onTracker: (@Sendable (TrackerOutput) -> Void)?
+    var onScene: (@Sendable (SceneUpdate) -> Void)?
     var onError: (@Sendable (String) -> Void)?
     /// Debug: one `;`-separated line per joined window for the probe's session log.
     var onDebugLine: (@Sendable (String) -> Void)?
@@ -103,6 +118,7 @@ final class AudioPipeline: @unchecked Sendable {
             self.classifierFailedAt = nil
             self.rawLabels = [:]
             self.levels = [:]
+            self.resetScene()
             self.tracker.reset()
         }
     }
@@ -115,6 +131,35 @@ final class AudioPipeline: @unchecked Sendable {
         joiner = WindowJoiner(hopLength: acc.hopLength)
         classifier = nil
         classifierKind = nil
+        resetScene()
+    }
+
+    private func resetScene() {
+        blockBuffer = [[], [], [], []]
+        blockStart = samplesSeen
+        ambient = AmbientTracker()
+        ambientDirection = AmbientDirection()
+        markerTracker.reset()
+    }
+
+    /// 0.1 s block: update ambient; a spike above it becomes an Unclassified marker at once,
+    /// anything else feeds the background-direction profile.
+    private func processBlock(_ block: FOAWindow) {
+        let level = UrgencyScore.level(rms: Double(Self.rms(block.w)))
+        ambient.add(level: level)
+        let now = Double(block.startSample) / sampleRate
+        let doa = estimator.estimate(estimator.intensity.analyze(block), windowStart: block.startSample,
+                                     calibration: calibration, deviceToWorld: deviceToWorld())
+        if AmbientTracker.isSpike(level: level, ambient: ambient.level) {
+            if doa.diffuseness < 0.9, let peak = doa.peaks.max(by: { $0.weight < $1.weight }) {
+                markerTracker.spike(bearing: peak.bearing, level: level, now: now)
+            }
+        } else {
+            ambientDirection.add(histogram: doa.histogram)
+        }
+        markerTracker.expire(now: now)
+        onScene?(SceneUpdate(now: now, ambientDB: ambient.level, ambientProfile: ambientDirection.profile,
+                             markers: markerTracker.markers))
     }
 
     /// Builds the classifier the app currently wants, starting at the current capture sample.
@@ -160,6 +205,14 @@ final class AudioPipeline: @unchecked Sendable {
         }
         classifier?.analyze(chunk.w)
         samplesSeen += Int64(chunk.w.count)
+        for (i, channel) in [chunk.w, chunk.x, chunk.y, chunk.z].enumerated() { blockBuffer[i] += channel }
+        let blockLength = Int(sampleRate / 10)
+        while blockBuffer[0].count >= blockLength {
+            let parts = blockBuffer.map { Array($0[0..<blockLength]) }
+            blockBuffer = blockBuffer.map { Array($0[blockLength...]) }
+            processBlock(FOAWindow(w: parts[0], x: parts[1], y: parts[2], z: parts[3], sampleRate: sampleRate, startSample: blockStart))
+            blockStart += Int64(blockLength)
+        }
         guard var acc = accumulator else { return }
         let windows = acc.append(w: chunk.w, x: chunk.x, y: chunk.y, z: chunk.z, sampleRate: chunk.sampleRate)
         accumulator = acc
@@ -185,6 +238,10 @@ final class AudioPipeline: @unchecked Sendable {
                                                     enabled: enabledOptionalGroups)
             let level = j.doa.flatMap { levels[$0.windowStart] }
             let created = tracker.ingest(active: active, doa: j.doa, now: now, levelDB: level)
+            // A classified sound claims the Unclassified marker it started as.
+            for e in tracker.events where e.lastSeen == now {
+                markerTracker.claim(group: e.group, bearing: e.showsDirection ? e.belief.peakBearing : nil, windowStart: now)
+            }
             onTracker?(TrackerOutput(events: tracker.events, newEvents: created, now: now))
             if let onDebugLine { onDebugLine(debugLine(j, active: active, now: now)) }
         }

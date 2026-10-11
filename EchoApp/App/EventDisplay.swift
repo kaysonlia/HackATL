@@ -57,3 +57,29 @@ struct EventDisplay: Identifiable, Equatable {
         radarAngle(forward: forward).map { DirectionPhrase.short(radarAngle: $0) } ?? "direction unknown"
     }
 }
+
+/// A sudden sound on the radar: blue "Unclassified" until the classifier names it, then that sound's
+/// name and color until its own direction estimate takes over.
+struct MarkerDisplay: Identifiable, Equatable {
+    let id: Int
+    var worldBearing: Double
+    var label: String
+    /// Urgency score once classified; nil draws the Unclassified blue.
+    var score: Double?
+    /// 1 while recent, fading to 0 by 2.5 s after the last spike.
+    var opacity: Double
+
+    /// `events` decide hand-off: a claimed marker disappears once its event shows an arrow.
+    static func from(_ markers: [SoundMarker], events: [EventDisplay], now: Double) -> [MarkerDisplay] {
+        markers.compactMap { m in
+            let age = now - m.lastSpike
+            let opacity = age < 1.5 ? 1 : max(0, (2.5 - age) / 1.0)
+            guard let group = m.claimedBy else {
+                return MarkerDisplay(id: m.id, worldBearing: m.bearing, label: "Unclassified", score: nil, opacity: opacity)
+            }
+            let event = events.first { $0.group == group }
+            if event?.worldBearing != nil { return nil }
+            return MarkerDisplay(id: m.id, worldBearing: m.bearing, label: group, score: event?.score, opacity: opacity)
+        }
+    }
+}

@@ -25,6 +25,12 @@ final class AppModel {
     var classifierWarning: String?
     var notificationsNote: String?
     var liveActivityNote: String?
+    /// Room background level (approximate dB SPL); nil when not listening.
+    var ambientDB: Double?
+    /// Where the background noise comes from: weight per 5° world bin (max 1).
+    var ambientProfile: [Double] = []
+    /// Sudden sounds: Unclassified arrows, or the sound they turned into.
+    var markers: [MarkerDisplay] = []
     /// When listening last started; drives the 3 s radar sweep.
     var listeningSince: Date?
     /// Debug: classify with YAMNet even in the foreground (it always runs in the background).
@@ -51,7 +57,10 @@ final class AppModel {
     @ObservationIgnored private var classificationsAtBackground = 0
     var probe = ProbeState()
     /// Extra lines for the status banner.
-    var notes: [String] { [classifierWarning, notificationsNote, liveActivityNote].compactMap { $0 } }
+    var notes: [String] {
+        let loudRoom = (ambientDB ?? 0) >= 80 ? "Very loud room: some sounds may be missed." : nil
+        return [classifierWarning, notificationsNote, liveActivityNote, loudRoom].compactMap { $0 }
+    }
     var calibration: FOAAxisCalibration {
         didSet {
             pipeline?.calibration = effectiveCalibration
@@ -98,6 +107,7 @@ final class AppModel {
             pipeline.enabledOptionalGroups = enabledOptionalGroups
             pipeline.onWindow = { [weak self] summary in Task { @MainActor in self?.apply(summary) } }
             pipeline.onTracker = { [weak self] output in Task { @MainActor in self?.apply(output) } }
+            pipeline.onScene = { [weak self] scene in Task { @MainActor in self?.apply(scene) } }
             pipeline.onError = { [weak self] message in
                 Task { @MainActor in
                     guard let self else { return }
@@ -184,6 +194,9 @@ final class AppModel {
         motion.stop()
         isListening = false
         listeningSince = nil
+        ambientDB = nil
+        ambientProfile = []
+        markers = []
         events = []
         status = .idle
     }
@@ -214,6 +227,13 @@ final class AppModel {
         } catch {
             return nil
         }
+    }
+
+    private func apply(_ scene: SceneUpdate) {
+        guard isListening else { return }
+        ambientDB = scene.ambientDB
+        ambientProfile = scene.ambientProfile
+        markers = MarkerDisplay.from(scene.markers, events: events, now: scene.now)
     }
 
     private func apply(_ summary: WindowSummary) {
