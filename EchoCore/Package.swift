@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.iOS(.v26), .macOS(.v15)],
     products: [.library(name: "EchoCore", targets: ["EchoCore"])],
     targets: [
-        .target(name: "EchoCore"),
+        .target(name: "EchoCore", resources: [.process("Resources")]),
         .testTarget(name: "EchoCoreTests", dependencies: ["EchoCore"]),
     ]
 )
