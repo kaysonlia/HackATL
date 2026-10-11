@@ -1,5 +1,5 @@
 {
-  "_comment": "Typical level in dB SPL at 1 m per SoundSightAI group, for the urgency distance estimate. Starting values; tune on device.",
+  "_comment": "Typical level in dB SPL at 1 m per SoundSight group, for the urgency distance estimate. Starting values; tune on device.",
   "levels": {
     "Siren": 120,
     "Smoke Alarm": 95,

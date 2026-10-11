@@ -18,6 +18,8 @@ public struct IntensityConfig: Sendable {
 public struct BinIntensity: Sendable {
     public var raw: SIMD3<Float>
     public var energy: Float
+    /// Bin centre frequency, Hz.
+    public var frequency: Float = 0
 }
 
 public struct IntensityResult: Sendable {
@@ -28,6 +30,17 @@ public struct IntensityResult: Sendable {
     /// Σ I over kept bins (raw FOA axes). Its direction is the energy-weighted arrival direction.
     public var summedRaw: SIMD3<Float>
     public var totalEnergy: Float
+
+    /// Band edges (Hz) for the direction test: 200–500, 500–1k, 1–2k, 2–4k, 4–8k.
+    public static let directionTestBands: [Float] = [200, 500, 1000, 2000, 4000, 8000]
+
+    /// Σ intensity and energy of the kept bins in each band [edges[i], edges[i+1]).
+    public func bandSums(edges: [Float]) -> [(raw: SIMD3<Float>, energy: Float)] {
+        (0..<(edges.count - 1)).map { i in
+            let inBand = bins.filter { $0.frequency >= edges[i] && $0.frequency < edges[i + 1] }
+            return (inBand.reduce(.zero) { $0 + $1.raw }, inBand.reduce(0) { $0 + $1.energy })
+        }
+    }
 }
 
 /// Turns an FOA window into per-bin active-intensity vectors.
@@ -71,7 +84,7 @@ public final class IntensityAnalyzer {
                     wr[k] * spectra[3].re[k] + wi[k] * spectra[3].im[k])
                 var e = wr[k] * wr[k] + wi[k] * wi[k]
                 for c in 1...3 { e += spectra[c].re[k] * spectra[c].re[k] + spectra[c].im[k] * spectra[c].im[k] }
-                all.append(BinIntensity(raw: i, energy: 0.5 * e))
+                all.append(BinIntensity(raw: i, energy: 0.5 * e, frequency: Float(Double(k) * win.sampleRate / Double(n))))
             }
             start += config.hopSize
         }

@@ -1,5 +1,5 @@
 {
-  "_comment": "SoundSightAI sound groups by urgency tier (regrouped from the 42 starting groups; hidden sounds are unmapped).",
+  "_comment": "SoundSight sound groups by urgency tier (regrouped from the 42 starting groups; hidden sounds are unmapped).",
   "CRITICAL": [
     "Siren",
     "Smoke Alarm",

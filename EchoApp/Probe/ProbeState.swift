@@ -25,6 +25,88 @@ struct ProbeState {
 
     var isRecording: Bool { recordingUntil != nil }
 
+    /// Guided recording of known source positions (phone flat on a table, screen up), with per-band raw
+    /// intensity, for measuring direction and height error offline.
+    struct DirectionTestStep {
+        let label: String
+        let instruction: String
+        /// The same position with the phone held flat at chest height.
+        let handInstruction: String
+        /// Degrees clockwise from the phone's top edge; nil straight above.
+        let bearing: Double?
+        let elevation: Double
+    }
+
+    static let directionTestSteps: [DirectionTestStep] = [
+        .init(label: "front-level", instruction: "In front (past the top edge), at table height, about 1 m away",
+              handInstruction: "In front (past the top edge), level with the phone, at arm's length", bearing: 0, elevation: 0),
+        .init(label: "right-level", instruction: "To the right, at table height, about 1 m away",
+              handInstruction: "To the right, level with the phone, at arm's length", bearing: 90, elevation: 0),
+        .init(label: "back-level", instruction: "Behind (past the bottom edge), at table height, about 1 m away",
+              handInstruction: "Behind (past the bottom edge), level with the phone, at arm's length", bearing: 180, elevation: 0),
+        .init(label: "left-level", instruction: "To the left, at table height, about 1 m away",
+              handInstruction: "To the left, level with the phone, at arm's length", bearing: 270, elevation: 0),
+        .init(label: "front-up45", instruction: "In front, about 1 m away and 1 m above the table",
+              handInstruction: "In front, as far out as it is above the phone (45° up)", bearing: 0, elevation: 45),
+        .init(label: "right-up45", instruction: "To the right, about 1 m away and 1 m above the table",
+              handInstruction: "To the right, as far out as it is above the phone (45° up)", bearing: 90, elevation: 45),
+        .init(label: "back-up45", instruction: "Behind, about 1 m away and 1 m above the table",
+              handInstruction: "Behind, as far out as it is above the phone (45° up)", bearing: 180, elevation: 45),
+        .init(label: "above", instruction: "Directly above the phone, about 50 cm up, speaker facing down",
+              handInstruction: "Directly above the phone, about 50 cm up, speaker facing down", bearing: nil, elevation: 90),
+        .init(label: "front-down45", instruction: "Move the phone to the table edge. In front, about 50 cm out and 50 cm below the tabletop",
+              handInstruction: "In front, as far out as it is below the phone (45° down)", bearing: 0, elevation: -45),
+    ]
+
+    var directionStep = 0
+    /// Phone held flat at chest height instead of lying on a table; saved with every row.
+    var directionHandheld = false
+    var directionTestUntil: Date?
+    private(set) var directionRows: [String] = []
+    private(set) var directionCounts: [Int] = Array(repeating: 0, count: directionTestSteps.count)
+
+    var isRecordingDirectionTest: Bool { directionTestUntil != nil }
+
+    mutating func ingestDirectionTest(_ s: WindowSummary, calibration: FOAAxisCalibration, deviceToWorld d: simd_float3x3,
+                                      forward: Double, now: Date) {
+        guard let until = directionTestUntil else { return }
+        if now >= until {
+            directionTestUntil = nil
+            if directionStep < Self.directionTestSteps.count - 1 { directionStep += 1 }
+            return
+        }
+        let step = Self.directionTestSteps[directionStep]
+        let top = s.doa.peaks.max(by: { $0.weight < $1.weight })
+        func f(_ x: Double?) -> String { x.map { String(format: "%.2f", $0) } ?? "" }
+        var fields = [step.label, directionHandheld ? "hand" : "table", f(step.bearing), f(step.elevation), String(format: "%.3f", now.timeIntervalSince1970),
+                      f(s.levelDB), f(Double(s.diffuseness)), f(forward),
+                      f(top.map { ForwardHeading.radarAngle(worldBearing: $0.bearing, forward: forward) })]
+        fields += (0..<3).flatMap { r in [d[0][r], d[1][r], d[2][r]].map { String($0) } }
+        fields += calibration.rows.flatMap { $0.map { String($0) } }
+        fields += s.bands.flatMap { [String($0.raw.x), String($0.raw.y), String($0.raw.z), String($0.energy)] }
+        directionRows.append(fields.joined(separator: ","))
+        directionCounts[directionStep] += 1
+    }
+
+    func directionTestCSV() -> String {
+        var header = ["step", "mount", "true_bearing", "true_elevation", "unix_time", "level_db", "diffuseness", "forward",
+                      "peak_radar"]
+        header += (0..<3).flatMap { r in (0..<3).map { "d2w\(r)\($0)" } }
+        header += (0..<3).flatMap { r in (0..<3).map { "cal\(r)\($0)" } }
+        let edges = IntensityResult.directionTestBands
+        header += (0..<(edges.count - 1)).flatMap { i in
+            ["x", "y", "z", "e"].map { "b\(Int(edges[i]))_\(Int(edges[i + 1]))_\($0)" }
+        }
+        return ([header.joined(separator: ",")] + directionRows).joined(separator: "\n") + "\n"
+    }
+
+    mutating func clearDirectionTest() {
+        directionRows = []
+        directionCounts = Array(repeating: 0, count: Self.directionTestSteps.count)
+        directionStep = 0
+        directionTestUntil = nil
+    }
+
     func count(at angle: Double) -> Int { samples.filter { $0.trueBearing == angle }.count }
 
     mutating func ingest(_ s: WindowSummary, calibration: FOAAxisCalibration, now: Date) {

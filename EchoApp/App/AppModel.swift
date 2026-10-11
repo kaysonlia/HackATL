@@ -96,6 +96,14 @@ final class AppModel {
             UserDefaults.standard.set(enabledOptionalGroups.sorted(), forKey: Self.optionalGroupsKey)
         }
     }
+    private static let loudnessMarginKey = "loudnessMargin"
+    /// dB a sound must stand out from the room's background to be named; persisted.
+    var loudnessMargin: Double = UserDefaults.standard.object(forKey: AppModel.loudnessMarginKey) as? Double ?? LoudnessGate.defaultMargin {
+        didSet {
+            pipeline?.loudnessMargin = loudnessMargin
+            UserDefaults.standard.set(loudnessMargin, forKey: Self.loudnessMarginKey)
+        }
+    }
     @ObservationIgnored private var announced: Set<String> = []
     @ObservationIgnored private var isStarting = false
     /// Latest tracker events and live capture time (seconds), for 10 Hz display refreshes.
@@ -118,6 +126,7 @@ final class AppModel {
             let pipeline = try AudioPipeline(resources: resources) { motion.deviceToWorld() }
             pipeline.calibration = effectiveCalibration
             pipeline.enabledOptionalGroups = enabledOptionalGroups
+            pipeline.loudnessMargin = loudnessMargin
             pipeline.onWindow = { [weak self] summary in Task { @MainActor in self?.apply(summary) } }
             pipeline.onTracker = { [weak self] output in Task { @MainActor in self?.apply(output) } }
             pipeline.onScene = { [weak self] scene in Task { @MainActor in self?.apply(scene) } }
@@ -235,6 +244,22 @@ final class AppModel {
         probe.recordingUntil = Date().addingTimeInterval(seconds)
     }
 
+    func recordDirectionTest(seconds: Double) {
+        probe.directionTestUntil = Date().addingTimeInterval(seconds)
+    }
+
+    /// Writes the direction test to Documents (readable from the Mac with devicectl) and returns it for sharing.
+    func saveDirectionTest() -> URL? {
+        guard let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return nil }
+        let url = dir.appendingPathComponent("direction-test-\(Int(Date().timeIntervalSince1970)).csv")
+        do {
+            try probe.directionTestCSV().write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
     func fitProbe() {
         probe.fit = CalibrationFitter.fit(probe.samples)
     }
@@ -278,6 +303,8 @@ final class AppModel {
     private func apply(_ summary: WindowSummary) {
         windowsSeen += 1
         probe.ingest(summary, calibration: effectiveCalibration, now: Date())
+        probe.ingestDirectionTest(summary, calibration: effectiveCalibration, deviceToWorld: motion.deviceToWorld(),
+                                  forward: forwardBearing, now: Date())
         // Debug: once a second, the raw (device-frame) bearing with the phone's orientation.
         if windowsSeen % 2 == 0, summary.totalEnergy > 0 {
             let radar = summary.doa.peaks.max(by: { $0.weight < $1.weight })

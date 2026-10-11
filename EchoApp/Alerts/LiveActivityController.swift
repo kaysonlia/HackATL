@@ -50,7 +50,7 @@ final class LiveActivityController {
 
     private func request() {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            onProblem?("The lock-screen bar is turned off in Settings › SoundSightAI › Live Activities.")
+            onProblem?("The lock-screen bar is turned off in Settings › SoundSight › Live Activities.")
             return
         }
         do {

@@ -1,4 +1,4 @@
-# SoundSightAI: known issues and unverified items (2026-10-11)
+# SoundSight: known issues and unverified items (2026-10-11)
 
 These are left over from the final whole-branch review (`f9dff1b..8c9a932`). The Critical and Important findings were fixed in `8c9a932`.
 

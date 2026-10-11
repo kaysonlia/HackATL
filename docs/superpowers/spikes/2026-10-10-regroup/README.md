@@ -1,6 +1,6 @@
 # Sound regroup: 2026-10-10
 
-The 42 starting groups were too many for SoundSightAI. Several were clutter on device (Music, Appliance, Typing, Keys), several were dead (Car Alarm, TV/Radio and Fart have no Apple labels), and a few labels sat in the wrong group (`foghorn` in Siren, `bicycle_bell` in Music, `tap` in Knock).
+The 42 starting groups were too many for SoundSight. Several were clutter on device (Music, Appliance, Typing, Keys), several were dead (Car Alarm, TV/Radio and Fart have no Apple labels), and a few labels sat in the wrong group (`foghorn` in Siren, `bicycle_bell` in Music, `tap` in Knock).
 
 ## New groups
 

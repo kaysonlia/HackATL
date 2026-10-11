@@ -77,9 +77,6 @@ struct RadarView: View {
             ctx.stroke(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)),
                        with: .color(.secondary.opacity(0.35)), lineWidth: 1)
         }
-        for (label, angle) in [("FRONT", 0.0), ("RIGHT", 90), ("BACK", 180), ("LEFT", 270)] {
-            ctx.draw(Text(label).font(.caption2.bold()).foregroundStyle(.secondary), at: radarPoint(c, radius + 22, angle))
-        }
     }
 
     private func drawSweep(_ ctx: inout GraphicsContext, _ c: CGPoint, _ radius: CGFloat, elapsed: Double) {

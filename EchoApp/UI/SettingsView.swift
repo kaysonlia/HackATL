@@ -1,3 +1,4 @@
+import EchoCore
 import SwiftUI
 
 /// User settings: optional sound groups that are hidden by default.
@@ -30,6 +31,22 @@ struct SettingsView: View {
                     Text("Extra sounds")
                 } footer: {
                     Text("Off by default: they happen often and rarely need action. When on, they show as low urgency.")
+                }
+                Section {
+                    VStack(alignment: .leading) {
+                        LabeledContent("Louder than the room by", value: "\(Int(model.loudnessMargin.rounded())) dB")
+                        Slider(value: $model.loudnessMargin, in: LoudnessGate.marginRange, step: 1) {
+                            Text("Strictness")
+                        } minimumValueLabel: {
+                            Text("More\nsensitive").font(.caption).multilineTextAlignment(.leading)
+                        } maximumValueLabel: {
+                            Text("Less\nsensitive").font(.caption).multilineTextAlignment(.trailing)
+                        }
+                    }
+                } header: {
+                    Text("Strictness")
+                } footer: {
+                    Text("A sound is only named when its loudest moment is this much louder than the room's background (and at least 45 dB). Raise it in loud rooms to ignore quieter sounds; default 6 dB.")
                 }
                 Section {
                     Toggle(isOn: $model.demoMode) {

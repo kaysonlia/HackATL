@@ -11,6 +11,9 @@ struct WindowSummary: Sendable {
     var totalEnergy: Float
     var channelRMS: [Float]  // W, X, Y, Z
     var doa: DOAFrame
+    /// Raw-axis intensity and energy per `IntensityResult.directionTestBands` band, for the direction test.
+    var bands: [(raw: SIMD3<Float>, energy: Float)] = []
+    var levelDB: Double = 0
 }
 
 /// Every 0.1 s: the room's ambient level, where it comes from, and the Unclassified markers.
@@ -45,6 +48,7 @@ final class AudioPipeline: @unchecked Sendable {
     private let state = OSAllocatedUnfairLock(initialState: FOAAxisCalibration.initialGuess)
     private let wantsYAMNet = OSAllocatedUnfairLock(initialState: false)
     private let enabledOptional = OSAllocatedUnfairLock(initialState: Set<String>())
+    private let loudnessMarginLock = OSAllocatedUnfairLock(initialState: LoudnessGate.defaultMargin)
     private let deviceToWorld: @Sendable () -> simd_float3x3
 
     private var sampleRate: Double = 0
@@ -61,6 +65,8 @@ final class AudioPipeline: @unchecked Sendable {
     private var ambient = AmbientTracker()
     private var ambientDirection = AmbientDirection()
     private var markerTracker = MarkerTracker()
+    /// Sounds are only named when they stand out from the room.
+    private var loudnessGate = LoudnessGate()
     private var spikeGate = SpikeGate()
     private var handlingTimeline = HandlingTimeline()
     /// Loud impulses (≥ 20 dB over the room), so a classifier window holding one can name a single gunshot.
@@ -112,6 +118,12 @@ final class AudioPipeline: @unchecked Sendable {
         set { enabledOptional.withLock { $0 = newValue } }
     }
 
+    /// dB a sound must stand out from the room to be named (Settings › Strictness).
+    var loudnessMargin: Double {
+        get { loudnessMarginLock.withLock { $0 } }
+        set { loudnessMarginLock.withLock { $0 = newValue } }
+    }
+
     /// The phone is being touched or bumped until `date`: ignore sounds around then. Safe from any queue.
     func noteHandling(until date: Date) {
         handlingUntil.withLock { $0 = max($0, date) }
@@ -159,6 +171,7 @@ final class AudioPipeline: @unchecked Sendable {
         ambient = AmbientTracker()
         ambientDirection = AmbientDirection()
         markerTracker.reset()
+        loudnessGate.reset()
         spikeGate = SpikeGate()
         handlingTimeline = HandlingTimeline()
         impulseTimeline = HandlingTimeline()
@@ -181,6 +194,8 @@ final class AudioPipeline: @unchecked Sendable {
         handlingTimeline.prune(before: now - 10)
         impulseTimeline.prune(before: now - 10)
         ambient.add(level: level)
+        loudnessGate.margin = loudnessMargin
+        loudnessGate.addBlock(level: level, ambient: ambient.level, time: now)
         if level >= max(ambient.level + SpikeGate.impulseMargin, AmbientTracker.spikeFloor) {
             impulseTimeline.mark(from: now, to: now + 0.1)
         }
@@ -277,7 +292,9 @@ final class AudioPipeline: @unchecked Sendable {
             rawLabels = rawLabels.filter { $0.key >= cutoff }
             onWindow?(WindowSummary(summedRaw: intensity.summedRaw, diffuseness: intensity.diffuseness,
                                     totalEnergy: intensity.totalEnergy,
-                                    channelRMS: [window.w, window.x, window.y, window.z].map(Self.rms), doa: doa))
+                                    channelRMS: [window.w, window.x, window.y, window.z].map(Self.rms), doa: doa,
+                                    bands: intensity.bandSums(edges: IntensityResult.directionTestBands),
+                                    levelDB: levels[window.startSample] ?? 0))
             handle(joiner?.add(doa: doa) ?? [])
         }
     }
@@ -298,6 +315,8 @@ final class AudioPipeline: @unchecked Sendable {
                                        impulseInWindow: impulseTimeline.overlaps(now, now + 1)) {
                 active[gunshotAssist.group] = score
             }
+            // Quiet sounds aren't named; ones already being tracked carry on.
+            active = loudnessGate.filter(active, windowStart: now, tracked: tracker.events, evictAfter: tracker.evictAfter)
             let level = j.doa.flatMap { levels[$0.windowStart] }
             let created = tracker.ingest(active: active, doa: j.doa, now: now, levelDB: level)
             // A classified sound claims the Unclassified marker it started as.

@@ -1,7 +1,7 @@
 import Testing
 @testable import EchoCore
 
-/// SoundSightAI's regrouping: 13 groups always shown, 4 optional (off by default), everything else unmapped.
+/// SoundSight's regrouping: 13 groups always shown, 4 optional (off by default), everything else unmapped.
 struct SoundGroupTests {
     static let optional: Set<String> = ["Footsteps", "Water Running", "Power Tool", "Cough/Sneeze"]
 

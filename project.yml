@@ -30,17 +30,18 @@ targets:
     info:
       path: EchoApp/Info.plist
       properties:
-        CFBundleDisplayName: SoundSightAI
+        CFBundleDisplayName: SoundSight
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        NSMicrophoneUsageDescription: SoundSightAI listens to the sounds around you to identify them and show where they come from. Audio never leaves your iPhone.
-        NSMotionUsageDescription: SoundSightAI uses motion sensors to keep sound directions fixed as you turn.
+        NSMicrophoneUsageDescription: SoundSight listens to the sounds around you to identify them and show where they come from. Audio never leaves your iPhone.
+        NSMotionUsageDescription: SoundSight uses motion sensors to keep sound directions fixed as you turn.
         UIBackgroundModes: [audio]
         NSSupportsLiveActivities: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hackatl.soundsight
         TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     scheme: {}
   EchoLiveActivity:
     type: app-extension
@@ -59,7 +60,7 @@ targets:
     info:
       path: EchoLiveActivity/Info.plist
       properties:
-        CFBundleDisplayName: SoundSightAI
+        CFBundleDisplayName: SoundSight
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

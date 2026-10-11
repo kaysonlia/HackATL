@@ -1,6 +1,6 @@
-# SoundSightAI
+# SoundSight
 
-Real-time, on-device sound awareness for deaf and hard-of-hearing users. SoundSightAI is an iOS app for the **iPhone 16 Pro Max**. It classifies environmental sounds, ranks their urgency, and shows where each one is coming from on a full 360° radar, using the phone's microphone array as First-Order Ambisonics (FOA).
+Real-time, on-device sound awareness for deaf and hard-of-hearing users. SoundSight is an iOS app for the **iPhone 16 Pro Max**. It classifies environmental sounds, ranks their urgency, and shows where each one is coming from on a full 360° radar, using the phone's microphone array as First-Order Ambisonics (FOA).
 
 Design: [`docs/superpowers/specs/2026-10-10-soundsight-ios-foa-design.md`](docs/superpowers/specs/2026-10-10-soundsight-ios-foa-design.md)
 
@@ -39,7 +39,7 @@ swift test --package-path EchoCore
 | `EchoLiveActivity/` | Widget extension: lock-screen bar and Dynamic Island |
 | `docs/superpowers/` | Specs, spike and device-test results, implementation plans |
 
-## Using SoundSightAI
+## Using SoundSight
 
 Tap **Start Listening**. iOS asks for microphone, motion and notification access.
 
@@ -71,6 +71,7 @@ Tap **Start Listening**. iOS asks for microphone, motion and notification access
 
 - **Off by default:** Footsteps, Water Running, Power Tool and Cough/Sneeze. Turn them on in **Settings** (the gear icon).
 - **When sounds appear:** Low and Medium sounds appear after two detections (0.25 s apart); Critical and High sounds appear on the first.
+- **Only louder sounds:** a sound is only named if its loudest 0.1 s is at least 6 dB above the room's background (adjustable from 0 to 20 dB in Settings › Strictness) and at least 45 dB. Once named, it stays named while it continues, even after the background level catches up with a long siren.
 - **Never shown:** typing, keys, music, appliances, animals other than dogs, and similar background sounds.
 - **More detail:** `docs/superpowers/spikes/2026-10-10-regroup/`.
 
@@ -89,9 +90,9 @@ Tap **Start Listening**. iOS asks for microphone, motion and notification access
 
 ### While locked
 
-- **Listening continues:** once you tap Start Listening, SoundSightAI keeps listening when you lock the phone or switch apps, and the orange mic indicator stays on.
+- **Listening continues:** once you tap Start Listening, SoundSight keeps listening when you lock the phone or switch apps, and the orange mic indicator stays on.
 - **Classifier:** iOS stops Apple's sound classifier in the background, so YAMNet (run on the CPU) takes over. It is less accurate.
-- **Lock-screen bar:** a Live Activity shows the most urgent sound with a direction arrow, on the lock screen and in the Dynamic Island. Turn it off in Settings › SoundSightAI › Live Activities.
+- **Lock-screen bar:** a Live Activity shows the most urgent sound with a direction arrow, on the lock screen and in the Dynamic Island. Turn it off in Settings › SoundSight › Live Activities.
 - **Urgent notification:** an urgent sound posts one notification, at most one every 10 s. It needs two detections first, and each new one replaces the last instead of stacking.
 
 ### Demo mode
@@ -100,7 +101,7 @@ Clips played from a laptop or phone are much quieter than real sirens, so they l
 
 ### FOA probe (debug)
 
-Long-press the **SoundSightAI** title to open the probe. It provides:
+Long-press the **SoundSight** title to open the probe. It provides:
 - the live 4-channel format and levels;
 - a raw direction dial;
 - calibration recording and fitting;

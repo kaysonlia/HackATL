@@ -7,6 +7,7 @@ struct ProbeView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var csvURL: URL?
     @State private var sessionURL: URL?
+    @State private var directionURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -49,9 +50,43 @@ struct ProbeView: View {
                     Button("Reset to initial guess") { model.calibration = .initialGuess }
                     Button("Clear samples", role: .destructive) { model.probe.clearSamples() }
                 }
+                Section("Direction test (phone flat, screen up)") {
+                    Toggle("Phone held in hand", isOn: $model.probe.directionHandheld)
+                        .disabled(model.probe.isRecordingDirectionTest)
+                    Text(model.probe.directionHandheld
+                         ? "Hold the phone flat at chest height, as still as you can, away from walls. Play steady white noise from a second phone at each spot (or have someone hold it), then tap Record."
+                         : "Lay the phone on a table. Play steady white noise from a second phone's speaker at each spot, then tap Record. Keep the room quiet; it moves to the next step by itself.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    let steps = ProbeState.directionTestSteps
+                    let i = model.probe.directionStep
+                    let step = steps[i]
+                    Text("Step \(i + 1) of \(steps.count): \(model.probe.directionHandheld ? step.handInstruction : step.instruction)").bold()
+                    Button(model.probe.isRecordingDirectionTest ? "Recording…" : "Record 8 s") {
+                        model.recordDirectionTest(seconds: 8)
+                    }
+                    .disabled(model.probe.isRecordingDirectionTest || !model.isListening)
+                    HStack {
+                        Button("Previous") { model.probe.directionStep = max(0, i - 1) }
+                            .disabled(i == 0 || model.probe.isRecordingDirectionTest)
+                        Spacer()
+                        Button("Next") { model.probe.directionStep = min(steps.count - 1, i + 1) }
+                            .disabled(i == steps.count - 1 || model.probe.isRecordingDirectionTest)
+                    }
+                    .buttonStyle(.borderless)
+                    ForEach(steps.indices, id: \.self) { k in
+                        LabeledContent(steps[k].label, value: "\(model.probe.directionCounts[k]) windows")
+                    }
+                    Button("Save results") { directionURL = model.saveDirectionTest() }
+                        .disabled(model.probe.directionCounts.allSatisfy { $0 == 0 })
+                    if let directionURL { ShareLink("Share results", item: directionURL) }
+                    Button("Clear direction test", role: .destructive) {
+                        model.probe.clearDirectionTest()
+                        directionURL = nil
+                    }
+                }
                 Section("Classifier") {
                     Toggle("Force YAMNet (CPU)", isOn: $model.forceYAMNet)
-                    Text("Apple's classifier is used while SoundSightAI is open; YAMNet takes over automatically when the phone locks.")
+                    Text("Apple's classifier is used while SoundSight is open; YAMNet takes over automatically when the phone locks.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Session log (debug)") {
