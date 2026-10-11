@@ -19,4 +19,10 @@ public enum DirectionPhrase {
         }
         return "\(phrase) (\(hour) o'clock)"
     }
+
+    /// Short sector word for list rows: "front", "front-right", "right", … (45° sectors).
+    public static func short(radarAngle: Double) -> String {
+        let words = ["front", "front-right", "right", "back-right", "back", "back-left", "left", "front-left"]
+        return words[Int((Circular.wrap360(radarAngle) + 22.5) / 45) % 8]
+    }
 }
